@@ -1,0 +1,8 @@
+WATCH:
+    RSS my_blog = OPEN("https://test.com/rss")
+
+EVENTS:
+    EVENT check_update {
+        CONSOLE("Hello WORD!");
+        CONSOLE("Hello WORD!");
+    }

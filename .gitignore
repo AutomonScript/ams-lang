@@ -1,0 +1,7 @@
+build/
+generated/
+external/
+grammar/.antlr
+*.exe
+output.cpp
+.vscode/
