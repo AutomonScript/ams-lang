@@ -1,8 +1,9 @@
 ---
-ISSUE: "Others"  
-Title: "[Other] Title Text"  
+name: "Other"
+about: Any thing not related to other issue types.
+title: "[OTHER] Title Text"
+labels: anything, etc
 ---
-#### Labels: discussion
 
 ## Description
 Explain your issue, idea, or comment.

@@ -1,8 +1,9 @@
 ---
-ISSUE: "Help"  
-Title: "[Help] Title Text"  
+name: "Help"
+about: Ask for guidance or troubleshooting help
+title: "[HELP] Title Text"
+labels: config, setup, navigate, contribute, etc
 ---
-#### Labels: question, support
 
 ## Issue
 Describe the problem or question you have.

@@ -1,8 +1,9 @@
 ---
-ISSUE: "Documentation Request"  
-Title: "[Docs] Title Text"  
+name: "Documentation Request"
+about: Request improvements or additions to documentation
+title: "[DOCS] Title Text"
+labels: documentation
 ---
-#### Labels: documentation
 
 ## Area of Documentation
 Which part needs improvement?

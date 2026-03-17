@@ -1,8 +1,9 @@
 ---
-ISSUE: "Feature Suggestion" <br>
-Title: "[Feature] Title Text" <br>
+name: "Feature Suggestion"
+about: Suggest a new feature or enhancement
+title: "[Feature] Title Text"
+labels: enhancement, optimization, extension
 ---
-#### Labels: enhancement, optimization, extension, etc
 
 ## Description
 Briefly describe the feature you’d like to see.

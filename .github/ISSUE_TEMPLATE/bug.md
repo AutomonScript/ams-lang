@@ -1,8 +1,9 @@
 ---
-ISSUE: "Bug Report"  
-Title: "[Bug] Title Text"  
+name: "Bug Report"
+about: Report a reproducible bug or unexpected behavior
+title: "[BUG] Title Text"
+labels: bug, regression, critical
 ---
-#### Labels: bug, regression, critical
 
 ## Description
 What went wrong? What did you expect instead?
