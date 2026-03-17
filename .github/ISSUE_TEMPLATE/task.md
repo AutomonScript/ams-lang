@@ -1,7 +1,8 @@
+---
 ISSUE: "Task"  
 Title: "[Task] Title Text"  
+Labels: task, work, backlog, urgent, etc
 ---
-#### Labels: task, work, backlog, urgent, etc
 
 ## Description
 Describe the task clearly and concisely.

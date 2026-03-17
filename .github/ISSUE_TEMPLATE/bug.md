@@ -1,3 +1,4 @@
+---
 ISSUE: "Bug Report"  
 Title: "[Bug] Title Text"  
 ---
