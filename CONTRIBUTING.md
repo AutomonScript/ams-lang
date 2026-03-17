@@ -45,7 +45,8 @@ If you are new to the codebase, the first step is to learn about the project str
 5. **Open a PR**: Describe your changes clearly, link to any relevant issues, and request a review! 
 
 ### Suggesting Features / Reporting Bugs
-Follow the given templates to open an issue: `./ISSUE_TEMPLATE.md`
+Follow the given templates to open an issue:<br>
+`feature`, `bug`, `task`, `documentation`, `help`, `others`
 
 **Feature Suggestion**<br>
 When suggesting a feature, include the following information in your issue:
