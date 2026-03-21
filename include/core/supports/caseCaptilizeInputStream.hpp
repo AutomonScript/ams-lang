@@ -18,15 +18,6 @@ public:
             return character;
         }
 
-        // 1. Detect Comments (starts with #, ends with newline)
-        if (character == '#') {
-            _inComment = true;
-        } 
-        else if (_inComment && (character == '\n' || character == '\r')) {
-            _inComment = false;
-            return character; // Return the newline as is
-        }
-
         // 2. Detect String Literals (starts and ends with ")
         if (!_inComment && character == '"') {
             _inString = !_inString;

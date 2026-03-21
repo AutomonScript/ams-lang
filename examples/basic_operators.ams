@@ -1,0 +1,57 @@
+##
+Example: Using Basic Operators in AutomonScript
+Demonstrates: Arithmetic, Relational, and Logical Operators with Aliases.
+##
+
+GLOBAL:
+    INT baseValue = 10
+
+    # 1. Arithmetic & Power Operators (Follows BODMAS)
+    # (10 + 5) * 2^3 = 120
+    INT mathResult  = (baseValue ADD 5) * 2 POWER 3   
+    INT mathResult2 = (baseValue + 5) * 2 ^ 3
+
+    # 2. Relational Operators with Aliases 
+    BOOL isHighScore  = mathResult GREATER THAN 100 
+    
+    # 3. Floating Point & Division Test
+    # 10.5 / 2.0 = 5.25
+    FLOAT decimalTest = 10.5 / 2.0
+    
+    # 4. Remainder (% Operator) 
+    INT remainderValue = baseValue REMAINDER 3
+    BOOL isCorrectRem  = remainderValue EQUALS 1
+
+    # 5. Logical Operators
+    BOOL logicCheck  = (isHighScore AND isCorrectRem) | FALSE
+    BOOL reverselogicCheck = NOT logicCheck
+
+    PRINTLN("--------- Printing Expression Output ---------")
+    PRINTLN("Math Result 1     : ", mathResult)
+    PRINTLN("Math Result 2     : ", mathResult2)
+    PRINTLN("Division Test     : ", decimalTest)
+    PRINTLN("Logic Check       : ", logicCheck)
+    PRINTLN("Fliped Logic      : ", reverselogicCheck)
+
+SOURCES:
+    SOURCE Operator_Test_In_SOURCE
+        # Using the expression inside a SOURCE block
+        PRINTLN("Source Division   : ", 10.5 / 2.0)
+    ;
+
+EVENTS:
+    EVENT Operator_Test_In_EVENT
+        # Expression as Function Arguments 
+        validate_logic(mathResult > 50 & logicCheck)
+    ;
+
+OBSERVERS:
+    OBSERVER Operator_Test_In_OBSERVER
+        # Expression as Function Arguments with aliases 
+        validate_logic(mathResult > 50 AND logicCheck)
+    ;
+
+FUNCTIONS:
+    FUNCTION validate_logic(BOOL status)
+        PRINTLN("Validation Result : ", status)
+    ;

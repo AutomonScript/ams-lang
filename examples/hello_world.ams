@@ -1,27 +1,31 @@
+##
+Example : Printing "Hello World" in AutomonScript
+Basic AutomonScript Program to demonstrate Code Structure 
+and PRINT Message to Terminal using builtend functions.
+##
+
 GLOBAL:
-    IMPORT "xyz";
-    PRINTLN("Hello! WORD")
+
+    PRINT("Hello! ")
+    PRINTLN("WORLD")
+
 
 SOURCES:
-    SOURCE Hello_L 
+
+    SOURCE Hello_S 
         PRINTLN("Hello! ","From SOURCE") 
     ;
     
+
 EVENTS:
     Event Hello_E
        PRINTLN("Hello! ","From EVENT")
     ;
 
+
 OBSERVERS:
+
     OBSERVER Hello_O 
-        INT X = 1
-        PRINTLN("Hello! ","From OBSERVER", X);
-        X = 2
-        PRINTLN("Hello! ","From OBSERVER", 2)
-    ;
-
-FUNCTIONS:
-
-    FUNCTION print_hello()
-        PRINTLN("Hello WORD!")
+        PRINTLN("Hello! ","From OBSERVER ","x 1")
+        PRINTLN("Hello! ","From OBSERVER ","x 2")
     ;

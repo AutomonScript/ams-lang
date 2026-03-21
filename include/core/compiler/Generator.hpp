@@ -27,6 +27,7 @@ public:
     //######################################### Code Generator #############################################
     void generate(std::shared_ptr<ProgramNode> program) {
         out << "#include <iostream>\n#include <string>\n#include <functional>\n\n";
+        out << "#include <cmath>\n\n";
         out << "#include \"include/stdlib/io/console.hpp\"\n\n";
         
         out << "int main() {\n";
@@ -63,8 +64,11 @@ public:
     
     //####################################### Common Statements  ###########################################
     void visit(LiteralNode* node) override {
-        // Output raw data (e.g., 42 or "Hello World")
-        out << node->value;
+        std::string val = node->value;
+        // Translate boolean literals to C++ lowercase
+        if (val == "TRUE") out << "true";
+        else if (val == "FALSE") out << "false";
+        else out << val;
     }
 
     void visit(VariableNode* node) override {
@@ -135,7 +139,7 @@ public:
     }
 
     
-    //####################################### Function Definations #########################################
+    //######################################## Function Definations #########################################
     void visit(FunctionDefinitionNode* node) override {
         std::string name = normalize(node->functionName);
         
@@ -153,17 +157,63 @@ public:
     void visit(FunctionCallNode* node) override {
         std::string name = normalize(node->functionName);
     
-        // CRITICAL: Add the FUNC_ prefix!
-        out << "        FUNC_" << name << "("; 
+        out << "    FUNC_" << name << "("; 
 
         for (size_t i = 0; i < node->arguments.size(); ++i) {
-            // This will automatically call visit(LiteralNode) or visit(VariableNode)
             node->arguments[i]->accept(this);
             if (i < node->arguments.size() - 1) out << ", ";
         }
-        out << ");\n";
+        out << ");\n"; // Ensure semicolon is here for standalone calls
     }
     
+    //####################################### Operators & Expressions  #########################################
+    void visit(UnaryOperatorNode* node) override {
+        std::string op = node->op;
+        if (op == "NOT" || op == "!") op = "!";
+        if (op == "SUBTRACT" || op == "MINUS") op = "-";
+        
+        out << "(" << op;
+        node->right->accept(this);
+        out << ")";
+    }
+
+    void visit(BinaryOperatorNode* node) override {
+        std::string op = node->op;
+
+        // Handle Power first (Function call)
+        if (op == "^" || op == "POWER") {
+            out << "std::pow(";
+            node->left->accept(this);
+            out << ", ";
+            node->right->accept(this);
+            out << ")";
+            return;
+        }
+
+        out << "(";
+        node->left->accept(this);
+        
+        // Translation Layer: AMS Alias -> C++ Operator
+        if (op == "ADD" || op == "+") op = "+";
+        else if (op == "SUBTRACT" || op == "-") op = "-";
+        else if (op == "MULTIPLY" || op == "*") op = "*";
+        else if (op == "DIVIDE" || op == "/") op = "/";
+        else if (op == "REMAINDER" || op == "%") op = "%";
+        else if (op == "EQUALS" || op == "==") op = "==";
+        else if (op == "AND" || op == "&") op = "&&";
+        else if (op == "OR" || op == "|") op = "||";
+        else if (op.find("GREATER") != std::string::npos) {
+            op = (op.find("EQUAL") != std::string::npos) ? ">=" : ">";
+        }
+        else if (op.find("LESS") != std::string::npos) {
+            op = (op.find("EQUAL") != std::string::npos) ? "<=" : "<";
+        }
+
+        out << " " << op << " ";
+        node->right->accept(this);
+        out << ")";
+    }
+
 private:
     std::ofstream out;
 };

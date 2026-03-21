@@ -27,13 +27,6 @@ STRING : 'STRING';
 BOOL   : 'BOOL';
 VOID   : 'VOID';
 //----------------------------------------------------------------------------
-ID        : [A-Z_][A-Z0-9_]*;
-STRING_L  : '"' (~["\r\n])* '"';
-INT_L     : [0-9]+;
-FLOAT_L   : [0-9]+ '.' [0-9]+;
-TRUE    : 'TRUE';
-FALSE   : 'FALSE';
-//----------------------------------------------------------------------------
 LBRACE  : '{';
 RBRACE  : '}';
 LPAREN  : '(';
@@ -43,10 +36,39 @@ SEMICOL : ';';
 COL     : ':';
 COMMA   : ',';
 NL      : '\n';
+
+//------------------------------ OPERATORS -----------------------------------
+// ARITHMETIC 
+PLUS  : '+' | 'ADD';
+MINUS : '-' | 'SUBTRACT';
+MULT  : '*' | 'MULTIPLY';
+DIV   : '/' | 'DIVIDE';
+MOD   : '%' | 'REMAINDER';
+POW   : '^' | 'POWER';
+
+// RELATIONAL
+EQ    : '==' | 'EQUALS';
+NEQ   : '!=' | 'NOT' [ \t\r]+ 'EQUALS';
+GT    : '>'  | 'GREATER' [ \t\r]+ 'THAN';
+LT    : '<'  | 'LESS' [ \t\r]+ 'THAN';
+GTE   : '>=' | 'GREATER' [ \t\r]+ 'EQUAL';
+LTE   : '<=' | 'LESS' [ \t\r]+ 'EQUAL';
+
+// LOGICAL
+AND   : '&' | 'AND';
+OR    : '|' | 'OR';
+NOT   : '!' | 'NOT';
 //----------------------------------------------------------------------------
 WS       : [ \t\r]+     -> skip;
 SLCOMMENT: '#' ~[\r\n]*      -> skip;
 MLCOMMENT: '#''#'.*?'#''#' -> skip;
+//----------------------------------------------------------------------------
+STRING_L  : '"' (~["\r\n])* '"';
+FLOAT_L   : [0-9]+ '.' [0-9]+;
+INT_L     : [0-9]+;
+TRUE    : 'TRUE';
+FALSE   : 'FALSE';
+ID        : [A-Z_][A-Z0-9_]*;
 //----------------------------------------------------------------------------
 
 //############################### PARSER #####################################
@@ -69,13 +91,34 @@ program
 //----------------------------------------------------------------------------
 // Common statements allowed in every program section 
 statement
-    : variableDeclaration
-    | assignment
-    | functionCall
+    : (variableDeclaration
+      | assignment
+      | functionCall
+      ) eos
     ;
 
-variableDeclaration : dataType ID (EQUAL argument)? eos ;
-assignment          : ID EQUAL argument eos ;
+variableDeclaration : dataType ID (EQUAL expression)? ;
+assignment          : ID EQUAL expression ;
+
+arguments           : expression (COMMA expression)* ;
+//----------------------------------------------------------------------------
+// EXPRESSIONS 
+
+expression
+    : LPAREN expression RPAREN                         
+    | op=(NOT | MINUS) expression
+    | <assoc=right> expression op=POW expression 
+    | expression op=(MULT | DIV | MOD) expression    
+    | expression op=(PLUS | MINUS) expression  
+    | expression op=(GT | LT | GTE | LTE) expression
+    | expression op=(EQ | NEQ) expression
+    | expression op=AND expression
+    | expression op=OR expression
+    | functionCall                             
+    | ID                                      
+    | STRING_L | INT_L | FLOAT_L | TRUE | FALSE
+    ;
+
 //----------------------------------------------------------------------------
 // Global Section 
 globalSection : GLOBAL COL eos globalItem* ;
@@ -128,8 +171,5 @@ functionItem:  statement
 parameters: parameter (COMMA parameter)* ;
 parameter  : dataType ID ;
 //----------------------------------------------------------------------------
-functionCall: ID LPAREN arguments? RPAREN eos? ;
-
-arguments  : argument (COMMA argument)* ;
-argument   : ID | STRING_L | INT_L | FLOAT_L |TRUE | FALSE;
+functionCall: ID LPAREN arguments? RPAREN ;
 //----------------------------------------------------------------------------

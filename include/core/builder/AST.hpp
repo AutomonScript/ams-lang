@@ -24,6 +24,9 @@ class VariableNode;
 
 class VariableDeclarationNode;
 class AssignmentNode;
+
+class UnaryOperatorNode;
+class BinaryOperatorNode;
 //############################## Visitor Interfacs #####################################
 class ASTVisitor {
 public:
@@ -48,6 +51,9 @@ public:
 
     virtual void visit(VariableDeclarationNode* node) = 0;
     virtual void visit(AssignmentNode* node) = 0;
+
+    virtual void visit(UnaryOperatorNode* node) = 0;
+    virtual void visit(BinaryOperatorNode* node) = 0;
 };
 //############################# AST Node Base Class ####################################
 class ASTNode {
@@ -83,7 +89,7 @@ class VariableDeclarationNode : public ASTNode {
 public:
     std::string dataType;
     std::string varName;
-    std::shared_ptr<ASTNode> value; // Optional (e.g., 'INT x;' vs 'INT x = 5;')
+    std::shared_ptr<ASTNode> value; 
 
     VariableDeclarationNode(std::string type, std::string name, std::shared_ptr<ASTNode> val = nullptr) 
         : dataType(std::move(type)), varName(std::move(name)), value(std::move(val)) {}
@@ -176,4 +182,34 @@ public:
     void accept(ASTVisitor* visitor) override { visitor->visit(this); }
 };
 
-//-------------------------------------------------------------------------------------
+//--------------------------- OPERATOR NODES -----------------------------------
+
+class UnaryOperatorNode : public ASTNode {
+public:
+    std::string op;
+    std::shared_ptr<ASTNode> right;
+
+    UnaryOperatorNode(std::string o, std::shared_ptr<ASTNode> r) 
+        : op(std::move(o)), right(std::move(r)) {}
+
+    void accept(ASTVisitor* visitor) override { 
+        visitor->visit(this); 
+    }
+};
+
+class BinaryOperatorNode : public ASTNode {
+public:
+    std::shared_ptr<ASTNode> left;
+    std::string op;
+    std::shared_ptr<ASTNode> right;
+
+    BinaryOperatorNode(std::shared_ptr<ASTNode> l, std::string o, std::shared_ptr<ASTNode> r) 
+        : left(std::move(l)), op(std::move(o)), right(std::move(r)) {}
+
+    void accept(ASTVisitor* visitor) override { 
+        visitor->visit(this); 
+    }
+};
+
+//--------------------------------------------------------------------------------------
+

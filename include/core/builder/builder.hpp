@@ -138,10 +138,10 @@ public:
     virtual antlrcpp::Any visitFunctionCall(AMSParser::FunctionCallContext *ctx) override {
         std::string name = ctx->ID()->getText();
         std::vector<std::shared_ptr<ASTNode>> args;
+
         if (ctx->arguments()) {
-            for (auto* argCtx : ctx->arguments()->argument()) {
-                // Safe extraction using get_node!
-                if (auto argNode = get_node<ASTNode>(visit(argCtx))) {
+            for (auto* exprCtx : ctx->arguments()->expression()) {
+                if (auto argNode = get_node<ASTNode>(visit(exprCtx))) {
                     args.push_back(argNode);
                 }
             }
@@ -149,6 +149,42 @@ public:
         return std::static_pointer_cast<ASTNode>(std::make_shared<FunctionCallNode>(name, args));
     }
 
+    virtual antlrcpp::Any visitExpression(AMSParser::ExpressionContext *ctx) override {
+        // 1. Parentheses
+        if (ctx->LPAREN()) {
+            return visit(ctx->expression(0));
+        }
+
+        // 2. Function Call
+        if (ctx->functionCall()) {
+            return visit(ctx->functionCall());
+        }
+
+        // 3. Unary Operator
+        if (ctx->expression().size() == 1 && ctx->op) {
+            std::string op = ctx->op->getText();
+            auto right = get_node<ASTNode>(visit(ctx->expression(0)));
+            return std::static_pointer_cast<ASTNode>(std::make_shared<UnaryOperatorNode>(op, right));
+        }
+
+        // 4. Binary Operator
+        if (ctx->expression().size() == 2) {
+            auto left = get_node<ASTNode>(visit(ctx->expression(0)));
+            std::string op = ctx->op->getText();
+            auto right = get_node<ASTNode>(visit(ctx->expression(1)));
+            return std::static_pointer_cast<ASTNode>(std::make_shared<BinaryOperatorNode>(left, op, right));
+        }
+
+        // 5. Variables - FIXED CASTING
+        if (ctx->ID()) {
+            auto node = std::make_shared<VariableNode>(ctx->getText());
+            return std::static_pointer_cast<ASTNode>(node); // <--- Use static_pointer_cast
+        }
+
+        // 6. Literals - FIXED CASTING
+        auto litNode = std::make_shared<LiteralNode>(ctx->getText());
+        return std::static_pointer_cast<ASTNode>(litNode); // <--- Use static_pointer_cast
+    }
     //########################################## Statements & Variables #################################
     virtual antlrcpp::Any visitStatement(AMSParser::StatementContext *ctx) override {
         if (ctx->functionCall()) return visit(ctx->functionCall());
@@ -162,26 +198,16 @@ public:
         std::string name = ctx->ID()->getText();
         std::shared_ptr<ASTNode> val = nullptr;
 
-        if (ctx->argument()) { 
-            val = get_node<ASTNode>(visit(ctx->argument()));
+        if (ctx->EQUAL()) {
+            val = get_node<ASTNode>(visit(ctx->expression()));
         }
         return std::static_pointer_cast<ASTNode>(std::make_shared<VariableDeclarationNode>(type, name, val));
     }
 
     virtual antlrcpp::Any visitAssignment(AMSParser::AssignmentContext *ctx) override {
         std::string name = ctx->ID()->getText();
-        auto val = get_node<ASTNode>(visit(ctx->argument()));
+        auto val = get_node<ASTNode>(visit(ctx->expression()));
         return std::static_pointer_cast<ASTNode>(std::make_shared<AssignmentNode>(name, val));
-    }
-
-    virtual antlrcpp::Any visitArgument(AMSParser::ArgumentContext *ctx) override {
-        std::string text = ctx->getText();
-        // Route to VariableNode or LiteralNode
-        if (ctx->ID()) {
-            return std::static_pointer_cast<ASTNode>(std::make_shared<VariableNode>(text));
-        } else {
-            return std::static_pointer_cast<ASTNode>(std::make_shared<LiteralNode>(text));
-        }
     }
 
     //##################################### Pass Through Visitors  ####################################
