@@ -62,14 +62,21 @@ int main(int argc, const char* argv[]) {
         //Compiled :  Produces an executable file
         std::string tempCpp = "temp_output.cpp";
         std::filesystem::path exePath = inputPath;
-        exePath.replace_extension(".exe");
+        
+        #ifdef _WIN32
+            exePath.replace_extension(".exe");
+            std::string flag = " -mconsole";
+        #elif __linux__
+            exePath.replace_extension("");
+            std::string flag = "";
+        #endif
 
         Generator generator(tempCpp);
         generator.generate(ast);
         generator.close();
 
         // Compile to Executable
-        std::string compileCmd = "g++ " + tempCpp + " -o \"" + exePath.string() + "\" -mconsole";
+        std::string compileCmd = "g++ " + tempCpp + " -o \"" + exePath.string() + "\"" + flag;
 
         if (std::system(compileCmd.c_str()) == 0) {
             // Clean up intermediate code
