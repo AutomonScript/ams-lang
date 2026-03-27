@@ -29,7 +29,6 @@ It processes `.ams` scripts into efficient high peformance deployable executable
     ```powershell
     ams 
     ```
-    ```
 + Builds AutomonScript Code in Compi
     ```powershell
     ams build .\examples\hello_world.ams
