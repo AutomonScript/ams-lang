@@ -26,6 +26,11 @@ FLOAT  : 'FLOAT';
 STRING : 'STRING';
 BOOL   : 'BOOL';
 VOID   : 'VOID';
+
+// Conditional Statements
+IF : 'IF';
+ELSE_IF : 'ELSE'[ \t\r]+'IF';
+ELSE : 'ELSE';
 //----------------------------------------------------------------------------
 LBRACE  : '{';
 RBRACE  : '}';
@@ -95,12 +100,24 @@ statement
       | assignment
       | functionCall
       ) eos
+      | conditionalStatements eos?
     ;
 
 variableDeclaration : dataType ID (EQUAL expression)? ;
 assignment          : ID EQUAL expression ;
 
-arguments           : expression (COMMA expression)* ;
+conditionalStatements: IF LPAREN? expression RPAREN? NL* conditionalBlock 
+                        (NL* ELSE_IF LPAREN? expression RPAREN? NL* conditionalBlock )* 
+                        (NL* ELSE NL* conditionalBlock )? 
+                        ;
+
+conditionalBlock: LBRACE eos? statement* RBRACE 
+                | eos? statement* SEMICOL
+                | statement 
+                ;
+
+
+arguments : expression (COMMA expression)* ;
 //----------------------------------------------------------------------------
 // EXPRESSIONS 
 

@@ -185,11 +185,13 @@ public:
         auto litNode = std::make_shared<LiteralNode>(ctx->getText());
         return std::static_pointer_cast<ASTNode>(litNode); // <--- Use static_pointer_cast
     }
+
     //########################################## Statements & Variables #################################
     virtual antlrcpp::Any visitStatement(AMSParser::StatementContext *ctx) override {
         if (ctx->functionCall()) return visit(ctx->functionCall());
         if (ctx->variableDeclaration()) return visit(ctx->variableDeclaration());
         if (ctx->assignment()) return visit(ctx->assignment());
+        if (ctx->conditionalStatements()) return visit(ctx->conditionalStatements());
         return antlrcpp::Any();
     }
 
@@ -208,6 +210,52 @@ public:
         std::string name = ctx->ID()->getText();
         auto val = get_node<ASTNode>(visit(ctx->expression()));
         return std::static_pointer_cast<ASTNode>(std::make_shared<AssignmentNode>(name, val));
+    }
+
+    //##################################### Conditional Statements ####################################
+    virtual antlrcpp::Any visitConditionalStatements(AMSParser::ConditionalStatementsContext *ctx) override {
+        auto node = std::make_shared<IfStatementNode>();
+        
+        // 1. Handle the main 'IF' branch
+        ConditionalBranch ifBranch;
+        // Condition is the first expression (index 0)
+        ifBranch.condition = get_node<ASTNode>(visit(ctx->expression(0)));
+        // Body is the first block (index 0)
+        ifBranch.body = std::any_cast<std::vector<std::shared_ptr<ASTNode>>>(visit(ctx->conditionalBlock(0)));
+        node->branches.push_back(ifBranch);
+        
+        // 2. Handle all 'ELSE_IF' branches
+        // i tracks the ELSE_IF token index; expressions/blocks for them start at index 1
+        for (size_t i = 0; i < ctx->ELSE_IF().size(); ++i) {
+            ConditionalBranch eiBranch;
+            eiBranch.condition = get_node<ASTNode>(visit(ctx->expression(i + 1)));
+            eiBranch.body = std::any_cast<std::vector<std::shared_ptr<ASTNode>>>(visit(ctx->conditionalBlock(i + 1)));
+            node->branches.push_back(eiBranch);
+        }
+        
+        // 3. Handle the final 'ELSE' branch
+        if (ctx->ELSE()) {
+            ConditionalBranch elseBranch;
+            elseBranch.condition = nullptr; // Null condition signifies 'ELSE'
+            // The last block in the context always belongs to ELSE
+            elseBranch.body = std::any_cast<std::vector<std::shared_ptr<ASTNode>>>(visit(ctx->conditionalBlock().back()));
+            node->branches.push_back(elseBranch);
+        }
+        
+        return std::static_pointer_cast<ASTNode>(node);
+    }
+
+    virtual antlrcpp::Any visitConditionalBlock(AMSParser::ConditionalBlockContext *ctx) override {
+        std::vector<std::shared_ptr<ASTNode>> statements;
+        
+        // ANTLR returns a vector for ctx->statement() in both brace and braceless cases!
+        for (auto* stmtCtx : ctx->statement()) {
+            if (auto ptr = get_node<ASTNode>(visit(stmtCtx))) {
+                statements.push_back(ptr);
+            }
+        }
+        
+        return statements;
     }
 
     //##################################### Pass Through Visitors  ####################################

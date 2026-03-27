@@ -214,6 +214,35 @@ public:
         out << ")";
     }
 
+    //##################################### Conditional Statements ####################################
+    void visit(IfStatementNode* node) override {
+        for (size_t i = 0; i < node->branches.size(); ++i) {
+            auto& branch = node->branches[i];
+
+            if (i == 0) {
+                out << "        if (";
+            } else if (branch.condition) {
+                out << " else if (";
+            } else {
+                out << " else {\n";
+            }
+
+            if (branch.condition) {
+                branch.condition->accept(this);
+                out << ") {\n";
+            }
+
+            for (auto& stmt : branch.body) {
+                stmt->accept(this);
+            }
+
+            if (i < node->branches.size() - 1) {
+                out << "        }"; 
+            } else {
+                out << "        }\n";
+            }
+        }
+    }
 private:
     std::ofstream out;
 };
