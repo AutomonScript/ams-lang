@@ -19,6 +19,8 @@ class ObserverDefinitionNode;
 class FunctionDefinitionNode;
 class FunctionCallNode;
 
+class IfStatementNode;
+
 class LiteralNode;
 class VariableNode;
 
@@ -54,7 +56,9 @@ public:
 
     virtual void visit(UnaryOperatorNode* node) = 0;
     virtual void visit(BinaryOperatorNode* node) = 0;
-};
+
+    virtual void visit(IfStatementNode* node) = 0;
+};  
 //############################# AST Node Base Class ####################################
 class ASTNode {
 public:
@@ -210,6 +214,15 @@ public:
         visitor->visit(this); 
     }
 };
+//----------------------------- Conditional Statements --------------------------------
+struct ConditionalBranch {
+    std::shared_ptr<ASTNode> condition; 
+    std::vector<std::shared_ptr<ASTNode>> body;
+};
 
+class IfStatementNode : public ASTNode {
+public:
+    std::vector<ConditionalBranch> branches;
+    void accept(ASTVisitor* visitor) override { visitor->visit(this); }
+};
 //--------------------------------------------------------------------------------------
-
