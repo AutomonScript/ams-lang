@@ -3,6 +3,8 @@
 #include <filesystem>
 #include <string>
 
+
+
 #include "antlr4-runtime.h"
 #include "AMSLexer.h"
 #include "AMSParser.h"   
@@ -12,8 +14,29 @@
 #include "core/builder/Builder.hpp"
 #include "core/compiler/Generator.hpp" 
 
+#ifdef _WIN32
+    #include <windows.h>
+#elif __linux__
+    #include <limits.h>
+    #include <unistd.h>
+#endif
+
 
 using namespace antlr4;
+
+std::filesystem::path getExecutablePath() {
+#ifdef _WIN32
+    char path[MAX_PATH];
+    GetModuleFileNameA(NULL, path, MAX_PATH);
+    return std::filesystem::path(path);
+#elif __linux__
+    char result[PATH_MAX];
+    ssize_t count = readlink("/proc/self/exe", result, PATH_MAX);
+    return std::filesystem::path(std::string(result, (count > 0) ? count : 0));
+#else
+    return std::filesystem::current_path();
+#endif
+}
 
 int main(int argc, const char* argv[]) {
     // Help Verbose for the dempnstration of Usage Options Available in AMS-Lang Engine 
@@ -75,8 +98,20 @@ int main(int argc, const char* argv[]) {
         generator.generate(ast);
         generator.close();
 
+        // Determine include path
+        std::filesystem::path enginePath = getExecutablePath().parent_path();
+        std::filesystem::path includePath = enginePath / "include";
+        if (!std::filesystem::exists(includePath)) {
+            includePath = enginePath / ".." / "include"; // For local dev
+            if (!std::filesystem::exists(includePath)) {
+                includePath = enginePath / ".." / "share" / "ams-lang" / "include"; // For Linux install
+            }
+        }
+
+        std::string includeFlag = " -I\"" + includePath.string() + "\"";
+
         // Compile to Executable
-        std::string compileCmd = "g++ " + tempCpp + " -o \"" + exePath.string() + "\"" + flag;
+        std::string compileCmd = "g++ " + tempCpp + " -o \"" + exePath.string() + "\"" + flag + includeFlag;
 
         if (std::system(compileCmd.c_str()) == 0) {
             // Clean up intermediate code

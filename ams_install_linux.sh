@@ -18,14 +18,19 @@ echo -e "${CYAN}Compiling AMS-Lang Engine:${NC}"
 make -j$(nproc)
 
 USER_INSTALL_DIR="$HOME/.local/bin"
+SHARE_DIR="$HOME/.local/share/ams-lang"
 BINARY_NAME="ams"
 
 if [ ! -d "$USER_INSTALL_DIR" ]; then
     mkdir -p "$USER_INSTALL_DIR"
 fi
+if [ ! -d "$SHARE_DIR" ]; then
+    mkdir -p "$SHARE_DIR"
+fi
 
 echo -e "${CYAN}Installing AMS-lang to $USER_INSTALL_DIR${NC}"
 cp "./$BINARY_NAME" "$USER_INSTALL_DIR/$BINARY_NAME"
+cp -r "../include" "$SHARE_DIR/include"
 
 if [[ ":$PATH:" != *":$USER_INSTALL_DIR:"* ]]; then
     echo -e "${CYAN}Adding $USER_INSTALL_DIR to .bashrc...${NC}"

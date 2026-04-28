@@ -19,9 +19,10 @@ if (-not (Test-Path $UserInstallDir)) {
     New-Item -Path $UserInstallDir -ItemType Directory | Out-Null
 }
 
-# Moving ams.exe to C:\Users\<Name>\AppData\Local\AutomonScript
+# Moving ams.exe and include to C:\Users\<Name>\AppData\Local\AutomonScript
 Write-Host "Installing AMS-lang at User AppData (for current user)." -ForegroundColor Cyan
 Copy-Item -Path ".\$BinaryName" -Destination $FinalPath -Force
+Copy-Item -Path "..\include" -Destination "$UserInstallDir\include" -Recurse -Force
 
 # Setup Global Access (User Alias) :  Run from anywhere using ams command
 # Example : asm run <filename> OR asm build <filename>
