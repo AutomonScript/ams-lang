@@ -28,7 +28,7 @@ public:
     void generate(std::shared_ptr<ProgramNode> program) {
         out << "#include <iostream>\n#include <string>\n#include <functional>\n\n";
         out << "#include <cmath>\n\n";
-        out << "#include \"include/stdlib/io/console.hpp\"\n\n";
+        out << "#include <stdlib/io/console.hpp>\n\n";
         
         out << "int main() {\n";
         
