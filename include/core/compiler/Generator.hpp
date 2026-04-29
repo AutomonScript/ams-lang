@@ -26,16 +26,10 @@ public:
     ~Generator() { if (fileOut.is_open()) fileOut.close(); }
 
     void generate(std::shared_ptr<ProgramNode> program) {
-<<<<<<< HEAD
         *outPtr << "#include <iostream>\n#include <string>\n#include <functional>\n#include <cmath>\n";
         *outPtr << "#include <thread>\n#include <chrono>\n"; 
         *outPtr << "#include \"include/stdlib/io/console.hpp\"\n";
         *outPtr << "#include \"include/runtime/runtime.hpp\"\n\n";
-=======
-        out << "#include <iostream>\n#include <string>\n#include <functional>\n\n";
-        out << "#include <cmath>\n\n";
-        out << "#include <stdlib/io/console.hpp>\n\n";
->>>>>>> b7b3605a0ebc96e43758260dc77452ebf3180bb7
         
         *outPtr << "int main() {\n";
         *outPtr << "    ams::Runtime rt;\n";
