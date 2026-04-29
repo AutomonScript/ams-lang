@@ -3,6 +3,7 @@
 #include <vector>
 #include <memory>
 #include <utility>
+
 //############################# AST Node Declaration  ##################################
 class ProgramNode;
 
@@ -29,7 +30,13 @@ class AssignmentNode;
 
 class UnaryOperatorNode;
 class BinaryOperatorNode;
-//############################## Visitor Interfacs #####################################
+
+// Runtime Nodes
+class TimeStatementNode;
+class DataAccessNode;
+class SignalNode;
+
+//############################## Visitor Interfaces #####################################
 class ASTVisitor {
 public:
     virtual ~ASTVisitor() = default;
@@ -58,7 +65,13 @@ public:
     virtual void visit(BinaryOperatorNode* node) = 0;
 
     virtual void visit(IfStatementNode* node) = 0;
+
+    // Runtime visitors
+    virtual void visit(TimeStatementNode* node) = 0;
+    virtual void visit(DataAccessNode* node) = 0;
+    virtual void visit(SignalNode* node) = 0;
 };  
+
 //############################# AST Node Base Class ####################################
 class ASTNode {
 public:
@@ -73,6 +86,7 @@ public:
     std::vector<std::shared_ptr<ASTNode>> programBlocks;
     void accept(ASTVisitor* visitor) override { visitor->visit(this); }
 };
+
 
 //--------------------------------------------------------------------------------------
 class LiteralNode : public ASTNode {
@@ -94,6 +108,8 @@ public:
     std::string dataType;
     std::string varName;
     std::shared_ptr<ASTNode> value; 
+    bool isTrack = false;
+    bool isUnshare = false;
 
     VariableDeclarationNode(std::string type, std::string name, std::shared_ptr<ASTNode> val = nullptr) 
         : dataType(std::move(type)), varName(std::move(name)), value(std::move(val)) {}
@@ -111,6 +127,7 @@ public:
 
     void accept(ASTVisitor* visitor) override { visitor->visit(this); }
 };
+
 //------------------------------- GLOBAL SECTION ---------------------------------------
 class GlobalSectionNode : public ASTNode {
 public:
@@ -137,6 +154,8 @@ class SourceDefinitionNode : public ASTNode {
 public:
     std::string sourceName;
     std::vector<std::shared_ptr<ASTNode>> statements;
+    std::shared_ptr<TimeStatementNode> schedule;
+
     SourceDefinitionNode(std::string name) : sourceName(std::move(name)) {}
     void accept(ASTVisitor* visitor) override { visitor->visit(this); }
 };
@@ -146,6 +165,9 @@ class EventDefinitionNode : public ASTNode {
 public:
     std::string eventName;
     std::vector<std::shared_ptr<ASTNode>> statements;
+    std::string sourceName;
+    std::shared_ptr<ASTNode> signalCondition;
+
     EventDefinitionNode(std::string name) : eventName(std::move(name)) {}
     void accept(ASTVisitor* visitor) override { visitor->visit(this); }
 };
@@ -155,6 +177,8 @@ class ObserverDefinitionNode : public ASTNode {
 public:
     std::string observerName;
     std::vector<std::shared_ptr<ASTNode>> statements;
+    std::string observesEvent;
+
     ObserverDefinitionNode(std::string name) : observerName(std::move(name)) {}
     void accept(ASTVisitor* visitor) override { visitor->visit(this); }
 };
@@ -214,6 +238,7 @@ public:
         visitor->visit(this); 
     }
 };
+
 //----------------------------- Conditional Statements --------------------------------
 struct ConditionalBranch {
     std::shared_ptr<ASTNode> condition; 
@@ -225,4 +250,43 @@ public:
     std::vector<ConditionalBranch> branches;
     void accept(ASTVisitor* visitor) override { visitor->visit(this); }
 };
-//--------------------------------------------------------------------------------------
+
+//----------------------------- Runtime Nodes -----------------------------------------
+class TimeStatementNode : public ASTNode {
+public:
+    enum class Type {
+        EVERY,
+        AT,
+        CONTINUOUSLY,
+        DEFAULT
+    };
+
+    Type type;
+    int value = 0;
+    std::string unit; // Ms, Sec, Min, Hour
+
+    TimeStatementNode(Type t, int v = 0, std::string u = "")
+        : type(t), value(v), unit(std::move(u)) {}
+
+    void accept(ASTVisitor* visitor) override { visitor->visit(this); }
+};
+
+class DataAccessNode : public ASTNode {
+public:
+    std::string sourceName;
+    std::string varName;
+
+    DataAccessNode(std::string src, std::string var)
+        : sourceName(std::move(src)), varName(std::move(var)) {}
+
+    void accept(ASTVisitor* visitor) override { visitor->visit(this); }
+};
+
+class SignalNode : public ASTNode {
+public:
+    std::shared_ptr<ASTNode> condition;
+
+    SignalNode(std::shared_ptr<ASTNode> cond) : condition(std::move(cond)) {}
+    void accept(ASTVisitor* visitor) override { visitor->visit(this); }
+};
+

@@ -12,20 +12,28 @@ GLOBAL:
 
 SOURCES:
 
-    SOURCE Hello_S 
+    SOURCE Hello_S
+        # SOURCE TRIGGER EVENT FOR CHECK ONLY WHEN TRACK VARIABLE CHANGES
+        # Hear dummy(force) update id done to trigger to view PRINT() in Events and Observers
+        TRACK bool trigger = false;
         PRINTLN("Hello! ","From SOURCE") 
+        trigger = !trigger;
     ;
     
 
 EVENTS:
-    Event Hello_E
-       PRINTLN("Hello! ","From EVENT")
+    EVENT Hello_E ON Hello_S
+        SIGNAL TRUE
+        PRINTLN("Hello! ","From EVENT")
     ;
 
 
 OBSERVERS:
 
-    OBSERVER Hello_O 
+    OBSERVER Hello_O OBSERVS Hello_E
         PRINTLN("Hello! ","From OBSERVER ","x 1")
+    ;
+
+     OBSERVER Hello_O2 OBSERVS Hello_E
         PRINTLN("Hello! ","From OBSERVER ","x 2")
     ;

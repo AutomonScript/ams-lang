@@ -31,6 +31,17 @@ VOID   : 'VOID';
 IF : 'IF';
 ELSE_IF : 'ELSE'[ \t\r]+'IF';
 ELSE : 'ELSE';
+
+// Runtime System Keywords
+TRACK       : 'TRACK';
+CHECK       : 'CHECK';
+EVERY       : 'EVERY';
+AT_KW       : 'AT';
+CONTINUOUSLY: 'CONTINUOUSLY';
+ON          : 'ON';
+OBSERVS     : 'OBSERVS';
+UNSHARE     : 'UNSHARE';
+SIGNAL      : 'SIGNAL';
 //----------------------------------------------------------------------------
 LBRACE  : '{';
 RBRACE  : '}';
@@ -40,6 +51,7 @@ EQUAL   : '=';
 SEMICOL : ';';
 COL     : ':';
 COMMA   : ',';
+DOT     : '.';
 NL      : '\n';
 
 //------------------------------ OPERATORS -----------------------------------
@@ -73,6 +85,12 @@ FLOAT_L   : [0-9]+ '.' [0-9]+;
 INT_L     : [0-9]+;
 TRUE    : 'TRUE';
 FALSE   : 'FALSE';
+// Time Unit Tokens (uppercase to match CaseCaptilizeInputStream)
+MS_UNIT   : 'MS';
+SEC_UNIT  : 'SEC';
+MIN_UNIT  : 'MIN';
+HOUR_UNIT : 'HOUR';
+
 ID        : [A-Z_][A-Z0-9_]*;
 //----------------------------------------------------------------------------
 
@@ -104,6 +122,8 @@ statement
     ;
 
 variableDeclaration : dataType ID (EQUAL expression)? ;
+sourceVariableDeclaration : (TRACK)? dataType ID (EQUAL expression)? ;
+eventVariableDeclaration : (UNSHARE)? dataType ID (EQUAL expression)? ;
 assignment          : ID EQUAL expression ;
 
 conditionalStatements: IF LPAREN? expression RPAREN? NL* conditionalBlock 
@@ -131,10 +151,13 @@ expression
     | expression op=(EQ | NEQ) expression
     | expression op=AND expression
     | expression op=OR expression
-    | functionCall                             
+    | functionCall
+    | dataAccess
     | ID                                      
     | STRING_L | INT_L | FLOAT_L | TRUE | FALSE
     ;
+
+dataAccess : ID DOT ID ;
 
 //----------------------------------------------------------------------------
 // Global Section 
@@ -147,26 +170,44 @@ globalItem : importStatement
 
 importStatement : IMPORT STRING_L eos;
 mergeStatement  : MERGE STRING_L eos;
+
+//----------------------------------------------------------------------------
+// Time and Scheduling Rules
+timeStatement   : EVERY INT_L timeUnit
+                | AT_KW TIME_LITERAL
+                | CONTINUOUSLY
+                ;
+
+timeUnit        : MS_UNIT | SEC_UNIT | MIN_UNIT | HOUR_UNIT ;
+
+TIME_LITERAL    : [0-2][0-9] ':' [0-5][0-9] ;
 //----------------------------------------------------------------------------
 // Sources Section Structure 
 sourcesSection : SOURCES COL eos sourceDefinition* ;
 sourceDefinition : SOURCE ID sourceScheduleStatement LBRACE eos sourceItem* RBRACE eos
                  | SOURCE ID sourceScheduleStatement  eos sourceItem* SEMICOL eos;
-sourceItem : statement
+sourceItem : sourceVariableDeclaration eos
+           | assignment eos
+           | functionCall eos
+           | conditionalStatements eos?
            ;
 
-
-sourceScheduleStatement : ;
+sourceScheduleStatement : (CHECK timeStatement)? ;
+//----------------------------------------------------------------------------
+// Events Section Structure
 //----------------------------------------------------------------------------
 // Events Section Structure
 eventsSection : EVENTS COL eos eventDefinition* ;
 eventDefinition : EVENT ID eventScheduleStatement LBRACE eos eventItem* RBRACE eos
                 | EVENT ID eventScheduleStatement eos eventItem* SEMICOL eos;
-eventItem : statement
+eventItem : eventVariableDeclaration eos
+          | assignment eos
+          | functionCall eos
+          | conditionalStatements eos?
+          | SIGNAL expression eos?
           ;
 
-
-eventScheduleStatement    : ;
+eventScheduleStatement : ON ID (SIGNAL expression)? ;
 //----------------------------------------------------------------------------
 // Observer Section Structure
 observersSection : OBSERVERS COL eos observerDefinition* ;
@@ -175,8 +216,7 @@ observerDefinition : OBSERVER ID observerScheduleStatement LBRACE eos observerIt
 observerItem : statement
              ;
 
-
-observerScheduleStatement : ;
+observerScheduleStatement : OBSERVS ID ;
 //----------------------------------------------------------------------------
 // Functions Section Structure
 functionsSection : FUNCTIONS COL eos functionDefinition* ;

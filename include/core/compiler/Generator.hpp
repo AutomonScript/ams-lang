@@ -1,248 +1,238 @@
 #pragma once
 #include "core/builder/AST.hpp"
 #include <fstream>
+#include <sstream>
 #include <string>
 #include <iostream>
 #include <algorithm>
+#include <memory>
 
-//::::::::::::::::::::::::::::::::: Helpers ::::::::::::::::::::::::::::::::::::
-// Helper to keep C++ names in sync with capitalized Lexer
-std::string normalize(std::string name) {
+inline std::string normalize(std::string name) {
     std::transform(name.begin(), name.end(), name.begin(), ::toupper);
     return name;
 }
 
-//::::::::::::::::::::::::::::::::: Generator ::::::::::::::::::::::::::::::::::
+namespace ams {
+
 class Generator : public ASTVisitor {
 public:
-    Generator(const std::string& outputFile) {
-        out.open(outputFile);
-        if (!out.is_open()) {
+    Generator(const std::string& outputFile) : outPtr(&fileOut) {
+        fileOut.open(outputFile);
+        if (!fileOut.is_open()) {
             std::cerr << "[ERROR] Could not open output file: " << outputFile << "\n";
         }
     }
 
-    ~Generator() { close(); }
+    ~Generator() { if (fileOut.is_open()) fileOut.close(); }
 
-    //######################################### Code Generator #############################################
     void generate(std::shared_ptr<ProgramNode> program) {
-        out << "#include <iostream>\n#include <string>\n#include <functional>\n\n";
-        out << "#include <cmath>\n\n";
-        out << "#include \"include/stdlib/io/console.hpp\"\n\n";
+        *outPtr << "#include <iostream>\n#include <string>\n#include <functional>\n#include <cmath>\n";
+        *outPtr << "#include <thread>\n#include <chrono>\n"; 
+        *outPtr << "#include \"include/stdlib/io/console.hpp\"\n";
+        *outPtr << "#include \"include/runtime/runtime.hpp\"\n\n";
         
-        out << "int main() {\n";
+        *outPtr << "int main() {\n";
+        *outPtr << "    ams::Runtime rt;\n";
         
-        // PASS 1: Define all Functions
-        out << "    // --- Function & Observer Definitions ---\n";
         if (program) {
+            bool hasRuntime = false;
             for (const auto& stmt : program->programBlocks) {
-                if (std::dynamic_pointer_cast<FunctionDefinitionNode>(stmt)) {
+                if (std::dynamic_pointer_cast<SourceDefinitionNode>(stmt)
+                    || std::dynamic_pointer_cast<EventDefinitionNode>(stmt)
+                    || std::dynamic_pointer_cast<ObserverDefinitionNode>(stmt)) {
+                    hasRuntime = true;
+                }
+            }
+            if (hasRuntime) *outPtr << "    rt.init();\n\n";
+            
+            // Declare global variables first
+            for (const auto& stmt : program->programBlocks) {
+                if (auto global = std::dynamic_pointer_cast<GlobalSectionNode>(stmt)) {
+                    global->accept(this);
+                }
+            }
+            
+            // Declare functions
+            for (const auto& stmt : program->programBlocks) {
+                if (auto func = std::dynamic_pointer_cast<FunctionDefinitionNode>(stmt)) {
+                    func->accept(this);
+                }
+            }
+            
+            for (const auto& stmt : program->programBlocks) {
+                if (auto src = std::dynamic_pointer_cast<SourceDefinitionNode>(stmt))
+                    emitSourceRegistration(src);
+            }
+            for (const auto& stmt : program->programBlocks) {
+                if (auto evt = std::dynamic_pointer_cast<EventDefinitionNode>(stmt))
+                    emitEventRegistration(evt);
+            }
+            for (const auto& stmt : program->programBlocks) {
+                if (auto obs = std::dynamic_pointer_cast<ObserverDefinitionNode>(stmt))
+                    emitObserverRegistration(obs);
+            }
+            
+            *outPtr << "\n    // --- Execution Logic ---\n";
+            for (const auto& stmt : program->programBlocks) {
+                if (!std::dynamic_pointer_cast<FunctionDefinitionNode>(stmt)
+                    && !std::dynamic_pointer_cast<SourceDefinitionNode>(stmt)
+                    && !std::dynamic_pointer_cast<EventDefinitionNode>(stmt)
+                    && !std::dynamic_pointer_cast<ObserverDefinitionNode>(stmt)
+                    && !std::dynamic_pointer_cast<GlobalSectionNode>(stmt)) {
                     stmt->accept(this);
                 }
             }
         }
-
-        // PASS 2: Execution Logic
-        out << "\n    // --- Execution Logic ---\n";
-        if (program) {
-            for (const auto& stmt : program->programBlocks) {
-                if (!std::dynamic_pointer_cast<FunctionDefinitionNode>(stmt)) {
-                    stmt->accept(this);
-                }
-            }
-        }
         
-        out << "\n    return 0;\n}\n";
+        *outPtr << "\n    while(true) { std::this_thread::sleep_for(std::chrono::seconds(1)); }\n";
+        *outPtr << "    rt.shutdown();\n    return 0;\n}\n";
     }
-    
-    void close() { if (out.is_open()) out.close(); }
 
-    //######################################## Program Visitor  ############################################
+    // --- Mandatory ASTVisitor Overrides ---
     void visit(ProgramNode* node) override {
         for (const auto& stmt : node->programBlocks) stmt->accept(this);
     }
-    
-    //####################################### Common Statements  ###########################################
+
     void visit(LiteralNode* node) override {
-        std::string val = node->value;
-        // Translate boolean literals to C++ lowercase
-        if (val == "TRUE") out << "true";
-        else if (val == "FALSE") out << "false";
-        else out << val;
+        if (node->value == "TRUE") *outPtr << "true";
+        else if (node->value == "FALSE") *outPtr << "false";
+        else *outPtr << node->value;
     }
 
-    void visit(VariableNode* node) override {
-        // Output the variable name (e.g., price)
-        out << node->name;
-    }
+    void visit(VariableNode* node) override { *outPtr << node->name; }
 
     void visit(VariableDeclarationNode* node) override {
-        // Map your DSL types to strict C++ types
-        std::string cppType = "auto"; 
-        if (node->dataType == "INT") cppType = "int";
-        else if (node->dataType == "FLOAT") cppType = "double";
-        else if (node->dataType == "STRING") cppType = "std::string";
-        else if (node->dataType == "BOOL") cppType = "bool";
+        std::string cppType = (node->dataType == "INT") ? "int" : 
+                             (node->dataType == "FLOAT") ? "double" :
+                             (node->dataType == "STRING") ? "std::string" : "bool";
 
-        out << "        " << cppType << " " << node->varName;
-        
-        // If they assigned a value (e.g. INT score = 100;)
+        *outPtr << "        " << cppType << " " << node->varName;
         if (node->value) {
-            out << " = ";
-            node->value->accept(this); 
+            *outPtr << " = ";
+            node->value->accept(this);
+        } else {
+            *outPtr << ( (cppType == "std::string") ? " = \"\"" : " = 0" );
         }
-        out << ";\n";
+        *outPtr << ";\n";
+
+        if (node->isTrack && !currentSourceContext.empty()) {
+            *outPtr << "        rt.updateVar(\"" << currentSourceContext << "\", \"" << node->varName << "\", " << node->varName << ");\n";
+        }
     }
 
     void visit(AssignmentNode* node) override {
-        out << "        " << node->varName << " = ";
+        *outPtr << "        " << node->varName << " = ";
         node->expression->accept(this);
-        out << ";\n";
-    }
-    //######################################## Global Section  #############################################
-    void visit(GlobalSectionNode* node) override {
-        out << "    // --- GLOBAL BLOCK ---\n";
-        for (const auto& item : node->statements) item->accept(this);
-    }
-
-    void visit(ImportNode* node) override {
-        out << "    // Import: " << node->moduleName << "\n";
-    }
-
-    void visit(MergeNode* node) override {
-        out << "    // Merge: " << node->targetName << "\n";
-    }
-
-    //####################################### Source Definations  ##########################################
-    void visit(SourceDefinitionNode* node) override {
-        out << "    // Source Block: " << normalize(node->sourceName) << "\n";
-        for (const auto& item : node->statements) item->accept(this); 
-    }
-
-    //######################################## Event Definations  ##########################################
-    void visit(EventDefinitionNode* node) override {
-        std::string name = normalize(node->eventName);
-        out << "    // Event: " << name << "\n";
-        out << "    auto EVENT_" << name << " = [&]() {\n";
-        for (const auto& stmt : node->statements) stmt->accept(this); 
-        out << "    };\n";
-        out << "    EVENT_" << name << "();\n\n";
-    }
-
-    //####################################### Observer Definations  ########################################
-    void visit(ObserverDefinitionNode* node) override {
-        std::string name = normalize(node->observerName);
-        out << "    auto OBSERVER_" << name << " = [&]() {\n"; // Use [&] to capture other functions
-        for (const auto& stmt : node->statements) stmt->accept(this);
-        out << "    };\n";
-        out << "    OBSERVER_" << name << "();\n\n";
-    }
-
-    
-    //######################################## Function Definations #########################################
-    void visit(FunctionDefinitionNode* node) override {
-        std::string name = normalize(node->functionName);
-        
-        // Write parameters into the lambda signature: auto FUNC_AAA = [&](auto x, auto y) { ... }
-        out << "    auto FUNC_" << name << " = [&]( ";
-        for (size_t i = 0; i < node->parameters.size(); ++i) {
-            out << "auto " << node->parameters[i] << (i == node->parameters.size() - 1 ? "" : ", ");
+        *outPtr << ";\n";
+        if (!currentSourceContext.empty()) {
+            *outPtr << "        rt.updateVar(\"" << currentSourceContext << "\", \"" << node->varName << "\", " << node->varName << ");\n";
         }
-        out << ") {\n";
+    }
 
+    void visit(GlobalSectionNode* node) override {
         for (const auto& stmt : node->statements) stmt->accept(this);
-        out << "    };\n\n";
+    }
+
+    void visit(ImportNode* node) override { *outPtr << "// Import " << node->moduleName << "\n"; }
+    void visit(MergeNode* node) override { *outPtr << "// Merge " << node->targetName << "\n"; }
+    void visit(SourceDefinitionNode* node) override {} // Handled by emit
+    void visit(EventDefinitionNode* node) override {}  // Handled by emit
+    void visit(ObserverDefinitionNode* node) override {} // Handled by emit
+
+    void visit(FunctionDefinitionNode* node) override {
+        *outPtr << "    auto FUNC_" << normalize(node->functionName) << " = [&]( ";
+        for (size_t i = 0; i < node->parameters.size(); ++i) {
+            *outPtr << "auto " << node->parameters[i] << (i == node->parameters.size() - 1 ? "" : ", ");
+        }
+        *outPtr << ") {\n";
+        for (const auto& stmt : node->statements) stmt->accept(this);
+        *outPtr << "    };\n";
     }
 
     void visit(FunctionCallNode* node) override {
-        std::string name = normalize(node->functionName);
-    
-        out << "    FUNC_" << name << "("; 
-
+        *outPtr << "FUNC_" << normalize(node->functionName) << "(";
         for (size_t i = 0; i < node->arguments.size(); ++i) {
             node->arguments[i]->accept(this);
-            if (i < node->arguments.size() - 1) out << ", ";
+            if (i < node->arguments.size() - 1) *outPtr << ", ";
         }
-        out << ");\n"; // Ensure semicolon is here for standalone calls
+        *outPtr << ");\n";
     }
-    
-    //####################################### Operators & Expressions  #########################################
+
     void visit(UnaryOperatorNode* node) override {
-        std::string op = node->op;
-        if (op == "NOT" || op == "!") op = "!";
-        if (op == "SUBTRACT" || op == "MINUS") op = "-";
-        
-        out << "(" << op;
+        *outPtr << "(" << node->op;
         node->right->accept(this);
-        out << ")";
+        *outPtr << ")";
     }
 
     void visit(BinaryOperatorNode* node) override {
-        std::string op = node->op;
-
-        // Handle Power first (Function call)
-        if (op == "^" || op == "POWER") {
-            out << "std::pow(";
-            node->left->accept(this);
-            out << ", ";
-            node->right->accept(this);
-            out << ")";
-            return;
+        if (node->op == "^") {
+            *outPtr << "std::pow(";
+            node->left->accept(this); *outPtr << ", ";
+            node->right->accept(this); *outPtr << ")";
+        } else {
+            *outPtr << "("; node->left->accept(this); 
+            *outPtr << " " << node->op << " "; 
+            node->right->accept(this); *outPtr << ")";
         }
-
-        out << "(";
-        node->left->accept(this);
-        
-        // Translation Layer: AMS Alias -> C++ Operator
-        if (op == "ADD" || op == "+") op = "+";
-        else if (op == "SUBTRACT" || op == "-") op = "-";
-        else if (op == "MULTIPLY" || op == "*") op = "*";
-        else if (op == "DIVIDE" || op == "/") op = "/";
-        else if (op == "REMAINDER" || op == "%") op = "%";
-        else if (op == "EQUALS" || op == "==") op = "==";
-        else if (op == "AND" || op == "&") op = "&&";
-        else if (op == "OR" || op == "|") op = "||";
-        else if (op.find("GREATER") != std::string::npos) {
-            op = (op.find("EQUAL") != std::string::npos) ? ">=" : ">";
-        }
-        else if (op.find("LESS") != std::string::npos) {
-            op = (op.find("EQUAL") != std::string::npos) ? "<=" : "<";
-        }
-
-        out << " " << op << " ";
-        node->right->accept(this);
-        out << ")";
     }
 
-    //##################################### Conditional Statements ####################################
     void visit(IfStatementNode* node) override {
         for (size_t i = 0; i < node->branches.size(); ++i) {
             auto& branch = node->branches[i];
-
-            if (i == 0) {
-                out << "        if (";
-            } else if (branch.condition) {
-                out << " else if (";
-            } else {
-                out << " else {\n";
-            }
-
-            if (branch.condition) {
-                branch.condition->accept(this);
-                out << ") {\n";
-            }
-
-            for (auto& stmt : branch.body) {
-                stmt->accept(this);
-            }
-
-            if (i < node->branches.size() - 1) {
-                out << "        }"; 
-            } else {
-                out << "        }\n";
-            }
+            if (i == 0) *outPtr << "        if (";
+            else if (branch.condition) *outPtr << " else if (";
+            else *outPtr << " else {\n";
+            if (branch.condition) { branch.condition->accept(this); *outPtr << ") {\n"; }
+            for (auto& stmt : branch.body) stmt->accept(this);
+            *outPtr << "        }\n";
         }
     }
+
+    void visit(TimeStatementNode* node) override {}
+    void visit(DataAccessNode* node) override {
+        *outPtr << "rt.getSnapshot(\"" << normalize(node->sourceName) << "\").getDouble(\"" << node->varName << "\")";
+    }
+    void visit(SignalNode* node) override {}
+
 private:
-    std::ofstream out;
+    std::ofstream fileOut;
+    std::ostream* outPtr;
+    std::string currentSourceContext = "";
+
+    void emitSourceRegistration(std::shared_ptr<SourceDefinitionNode> node) {
+        std::string name = normalize(node->sourceName);
+        std::stringstream body;
+        std::ostream* saved = outPtr;
+        outPtr = &body;
+        currentSourceContext = name;
+        for (const auto& stmt : node->statements) stmt->accept(this);
+        currentSourceContext = "";
+        outPtr = saved;
+        int ms = (node->schedule) ? node->schedule->value : 60000;
+        *outPtr << "    rt.schedulePeriodic(\"" << name << "\", " << ms << ", \"MS\", [&]() {\n" << body.str() << "    });\n";
+    }
+
+    void emitEventRegistration(std::shared_ptr<EventDefinitionNode> node) {
+        std::string name = normalize(node->eventName);
+        std::stringstream body;
+        std::ostream* saved = outPtr;
+        outPtr = &body;
+        for (const auto& stmt : node->statements) stmt->accept(this);
+        outPtr = saved;
+        *outPtr << "    rt.setSignalCondition(\"" << name << "\", \"" << normalize(node->sourceName) << "\", [&](const ams::Snapshot& snap) {\n" << body.str();
+        if (node->signalCondition) { *outPtr << "        return "; node->signalCondition->accept(this); *outPtr << ";\n"; }
+        else { *outPtr << "        return true;\n"; }
+        *outPtr << "    });\n";
+    }
+
+    void emitObserverRegistration(std::shared_ptr<ObserverDefinitionNode> node) {
+        std::stringstream body;
+        std::ostream* saved = outPtr;
+        outPtr = &body;
+        for (const auto& stmt : node->statements) stmt->accept(this);
+        outPtr = saved;
+        *outPtr << "    rt.registerObserver(\"" << normalize(node->observerName) << "\", \"" << normalize(node->observesEvent) << "\", [&](const ams::Snapshot& snap) {\n" << body.str() << "    });\n";
+    }
 };
+
+} // namespace ams

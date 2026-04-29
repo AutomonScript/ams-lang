@@ -1,0 +1,61 @@
+##
+Comprehensive Test Script for AutomonScript
+Tests all major features: variables, operators, sources, events, observers, functions, data access.
+##
+
+GLOBAL:
+    INT initial_temp = 20
+    FLOAT pressure_threshold = 100.5
+    STRING status = "INITIALIZING"
+
+    PRINTLN("--- AutomonScript Comprehnsive Test ---")
+    PRINTLN("Initial Temp: ", initial_temp)
+    PRINTLN("Pressure Threshold: ", pressure_threshold)
+    PRINTLN("Status: ", status)
+
+SOURCES:
+    SOURCE Temperature_Sensor CHECK EVERY 500 MS
+        TRACK INT current_temp = initial_temp
+        current_temp = current_temp + 2
+        PRINTLN("Temperature Sensor: ", current_temp, " C")
+    ;
+
+    SOURCE Pressure_Monitor CHECK EVERY 1000 MS
+        TRACK FLOAT current_pressure = 95.0
+        current_pressure = current_pressure + 1.5
+        PRINTLN("Pressure Monitor: ", current_pressure, " PSI")
+    ;
+
+EVENTS:
+    EVENT Overheat_Alert ON Temperature_Sensor 
+        SIGNAL Temperature_Sensor.current_temp > 30
+        PRINTLN("ALERT: Temperature too high!")
+    ;
+
+    EVENT Pressure_Warning ON Pressure_Monitor 
+        SIGNAL Pressure_Monitor.current_pressure >= pressure_threshold
+        #SIGNAL <NO STATEMENT> Means TRUE By DEFAULT and SIGNAL IS KEYWORD LIKE RETURN CAN BE USED ANYWHERE in IF, etc 
+        PRINTLN("WARNING: Pressure approaching threshold!")
+    ;
+
+OBSERVERS:
+    OBSERVER Emergency_Handler OBSERVS Overheat_Alert
+        PRINTLN("Emergency: Activating cooling system")
+        PRINTLN("Current Temp: ", Temperature_Sensor.current_temp)
+        activate_cooling()
+    ;
+
+    OBSERVER Maintenance_Notifier OBSERVS Pressure_Warning
+        PRINTLN("Maintenance: Check pressure valves")
+        PRINTLN("Current Pressure: ", Pressure_Monitor.current_pressure)
+        log_maintenance("Pressure check required")
+    ;
+
+FUNCTIONS:
+    FUNCTION activate_cooling()
+        PRINTLN("Cooling system activated")
+    ;
+
+    FUNCTION log_maintenance(STRING message)
+        PRINTLN("LOG: ", message)
+    ;
