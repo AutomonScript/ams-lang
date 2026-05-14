@@ -13,8 +13,7 @@ struct EventPayload {
     std::string sourceName;
     std::string eventName;
     long long timestamp;
-    // We don't need to copy the whole map here because Observers 
-    // can just request a fresh Snapshot using the sourceName!
+    std::string contextId;  // Context ID for SIGNAL-based data sharing
 };
 
 using EventHandler = std::function<void(const EventPayload&)>;

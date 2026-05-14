@@ -6,3 +6,4 @@ grammar/.antlr
 output.cpp
 .vscode/
 memory/
+.*/
