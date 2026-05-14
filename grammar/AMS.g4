@@ -157,7 +157,7 @@ expression
     | STRING_L | INT_L | FLOAT_L | TRUE | FALSE
     ;
 
-dataAccess : ID DOT ID ;
+dataAccess : (SOURCE | EVENT | ID) DOT ID ;
 
 //----------------------------------------------------------------------------
 // Global Section 
@@ -190,6 +190,7 @@ sourceItem : sourceVariableDeclaration eos
            | assignment eos
            | functionCall eos
            | conditionalStatements eos?
+           | SIGNAL expression? eos?
            ;
 
 sourceScheduleStatement : (CHECK timeStatement)? ;
@@ -204,7 +205,7 @@ eventItem : eventVariableDeclaration eos
           | assignment eos
           | functionCall eos
           | conditionalStatements eos?
-          | SIGNAL expression eos?
+          | SIGNAL expression? eos?
           ;
 
 eventScheduleStatement : ON ID (SIGNAL expression)? ;

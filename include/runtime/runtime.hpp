@@ -4,6 +4,7 @@
 #include "event_bus.hpp"
 #include "scheduler.hpp"
 #include "variable_registry.hpp"
+#include "track_copy_manager.hpp"
 #include <string>
 #include <functional>
 #include <chrono>
@@ -84,11 +85,25 @@ public:
             handler(snap);
         });
     }
+    
+    // ================= Track Copy Manager Access =================
+    TrackCopyManager& getTrackCopyManager() {
+        return trackCopyManager_;
+    }
+    
+    EventBus& getEventBus() {
+        return eventBus_;
+    }
+    
+    Scheduler& getScheduler() {
+        return scheduler_;
+    }
 
 private:
     VariableRegistry registry_;
     EventBus eventBus_;
     Scheduler scheduler_;
+    TrackCopyManager trackCopyManager_;
 
     int convertMs(int val, const std::string& u) {
         std::string unit = u;

@@ -5,7 +5,8 @@ and PRINT Message to Terminal using builtend functions.
 ##
 
 GLOBAL:
-
+    BOOL trigger = true;
+    INT X = 11;
     PRINT("Hello! ")
     PRINTLN("WORLD")
 
@@ -15,9 +16,9 @@ SOURCES:
     SOURCE Hello_S
         # SOURCE TRIGGER EVENT FOR CHECK ONLY WHEN TRACK VARIABLE CHANGES
         # Hear dummy(force) update id done to trigger to view PRINT() in Events and Observers
-        TRACK bool trigger = false;
-        PRINTLN("Hello! ","From SOURCE") 
         trigger = !trigger;
+        PRINTLN("Hello! ","From SOURCE") 
+        SIGNAL X>10;
     ;
     
 

@@ -273,8 +273,12 @@ public:
 
 class DataAccessNode : public ASTNode {
 public:
-    std::string sourceName;
+    std::string sourceName;  // "SOURCE" or "EVENT"
     std::string varName;
+    
+    // Semantic annotation fields (set during semantic validation)
+    std::string expectedType;  // "INT", "FLOAT", "STRING", "BOOL"
+    bool isValidAccess = true;  // Set to false if variable doesn't exist
 
     DataAccessNode(std::string src, std::string var)
         : sourceName(std::move(src)), varName(std::move(var)) {}
@@ -285,6 +289,11 @@ public:
 class SignalNode : public ASTNode {
 public:
     std::shared_ptr<ASTNode> condition;
+    
+    // Semantic annotation fields (set during semantic validation)
+    std::string containingEntityType;  // "SOURCE" or "EVENT"
+    std::string containingEntityName;
+    std::vector<std::string> trackVariables;  // TRACK vars in scope
 
     SignalNode(std::shared_ptr<ASTNode> cond) : condition(std::move(cond)) {}
     void accept(ASTVisitor* visitor) override { visitor->visit(this); }

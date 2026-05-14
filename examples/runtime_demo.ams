@@ -1,0 +1,207 @@
+##
+Comprehensive Runtime Demo for Signal-Based Async Scheduling
+Demonstrates:
+1. Multiple EVENTs attached to one SOURCE
+2. Multiple OBSERVERs attached to one EVENT
+3. TRACK variable persistence and sharing
+4. Conditional SIGNAL statements
+5. Transitive data sharing (SOURCE to EVENT to OBSERVER)
+6. SOURCE.varname and EVENT.varname data access
+7. Async execution and scheduling
+##
+
+GLOBAL:
+    PRINTLN("=== Signal-Based Async Scheduling Runtime Demo ===")
+    PRINTLN("")
+
+SOURCES:
+    ##
+    SCENARIO 1: Temperature Sensor with Multiple EVENTs
+    One SOURCE triggers THREE different events
+    ##
+    SOURCE TempSensor CHECK EVERY 2000 MS
+        TRACK INT temperature = 20
+        TRACK INT readingCount = 0
+        
+        temperature = temperature + 2
+        readingCount = readingCount + 1
+        
+        PRINTLN("[TempSensor] Reading ", readingCount, " temp ", temperature)
+        
+        SIGNAL TRUE
+    ;
+    
+    ##
+    SCENARIO 2: Motion Sensor with Conditional SIGNAL
+    Only triggers when count is even (simulating motion detection)
+    ##
+    SOURCE MotionSensor CHECK EVERY 3000 MS
+        TRACK INT motionCount = 0
+        
+        motionCount = motionCount + 1
+        
+        PRINTLN("[MotionSensor] Check ", motionCount)
+        
+        SIGNAL motionCount > 2
+    ;
+    
+    ##
+    SCENARIO 3: Data Source for Transformation Chain
+    ##
+    SOURCE DataSource CHECK EVERY 4000 MS
+        TRACK INT rawValue = 10
+        
+        rawValue = rawValue + 5
+        
+        PRINTLN("[DataSource] Raw value ", rawValue)
+        
+        SIGNAL TRUE
+    ;
+
+EVENTS:
+    ##
+    THREE EVENTs on TempSensor (demonstrates 1 SOURCE to N EVENTs)
+    ##
+    
+    EVENT TempLogger ON TempSensor
+        INT temp = SOURCE.temperature
+        INT count = SOURCE.readingCount
+        
+        PRINTLN("  [TempLogger] Logged reading ", count, " temp ", temp)
+        
+        SIGNAL TRUE
+    ;
+    
+    EVENT HighTempAlert ON TempSensor
+        INT temp = SOURCE.temperature
+        INT count = SOURCE.readingCount
+        
+        PRINTLN("  [HighTempAlert] Checking reading ", count, " temp ", temp)
+        
+        SIGNAL temp > 25
+    ;
+    
+    EVENT TempAnalyzer ON TempSensor
+        INT temp = SOURCE.temperature
+        INT count = SOURCE.readingCount
+        INT doubled = temp * 2
+        
+        PRINTLN("  [TempAnalyzer] Analysis ", count, " temp ", temp, " doubled ", doubled)
+        
+        SIGNAL TRUE
+    ;
+    
+    ##
+    EVENT on MotionSensor
+    ##
+    EVENT MotionEvent ON MotionSensor
+        INT count = SOURCE.motionCount
+        
+        PRINTLN("  [MotionEvent] Motion detected at count ", count)
+        
+        SIGNAL TRUE
+    ;
+    
+    ##
+    EVENT on DataSource
+    ##
+    EVENT DataProcessor ON DataSource
+        INT raw = SOURCE.rawValue
+        INT processed = raw * 3
+        
+        PRINTLN("  [DataProcessor] Processed ", raw, " to ", processed)
+        
+        SIGNAL TRUE
+    ;
+
+OBSERVERS:
+    ##
+    THREE OBSERVERs on TempLogger (demonstrates 1 EVENT to N OBSERVERs)
+    ##
+    
+    OBSERVER DatabaseWriter OBSERVS TempLogger
+        INT temp = SOURCE.temperature
+        INT count = SOURCE.readingCount
+        
+        PRINTLN("    [DatabaseWriter] Saving reading ", count, " temp ", temp)
+    ;
+    
+    OBSERVER CloudUploader OBSERVS TempLogger
+        INT temp = SOURCE.temperature
+        INT count = SOURCE.readingCount
+        
+        PRINTLN("    [CloudUploader] Uploading reading ", count, " temp ", temp)
+    ;
+    
+    OBSERVER LocalCache OBSERVS TempLogger
+        INT temp = SOURCE.temperature
+        
+        PRINTLN("    [LocalCache] Caching temp ", temp)
+    ;
+    
+    ##
+    TWO OBSERVERs on HighTempAlert (conditional - only when temp > 25)
+    ##
+    OBSERVER AlertNotifier OBSERVS HighTempAlert
+        INT temp = SOURCE.temperature
+        INT count = SOURCE.readingCount
+        
+        PRINTLN("    [AlertNotifier] HIGH TEMP ALERT reading ", count, " temp ", temp)
+    ;
+    
+    OBSERVER CoolingSystem OBSERVS HighTempAlert
+        INT temp = SOURCE.temperature
+        
+        PRINTLN("    [CoolingSystem] Activating cooling temp ", temp)
+    ;
+    
+    ##
+    TWO OBSERVERs on TempAnalyzer (demonstrates EVENT data access)
+    ##
+    OBSERVER StatisticsCollector OBSERVS TempAnalyzer
+        INT originalTemp = SOURCE.temperature
+        INT doubledTemp = EVENT.doubled
+        INT count = SOURCE.readingCount
+        
+        PRINTLN("    [StatisticsCollector] Stats ", count, " original ", originalTemp, " doubled ", doubledTemp)
+    ;
+    
+    OBSERVER TrendAnalyzer OBSERVS TempAnalyzer
+        INT temp = SOURCE.temperature
+        INT doubled = EVENT.doubled
+        
+        PRINTLN("    [TrendAnalyzer] Trend temp ", temp, " doubled ", doubled)
+    ;
+    
+    ##
+    TWO OBSERVERs on MotionEvent
+    ##
+    OBSERVER SecurityLogger OBSERVS MotionEvent
+        INT count = SOURCE.motionCount
+        
+        PRINTLN("    [SecurityLogger] Logging motion ", count)
+    ;
+    
+    OBSERVER LightController OBSERVS MotionEvent
+        INT count = SOURCE.motionCount
+        
+        PRINTLN("    [LightController] Lights ON for motion ", count)
+    ;
+    
+    ##
+    TWO OBSERVERs on DataProcessor (demonstrates data transformation chain)
+    ##
+    OBSERVER DataConsumer1 OBSERVS DataProcessor
+        INT raw = SOURCE.rawValue
+        INT processed = EVENT.processed
+        
+        PRINTLN("    [DataConsumer1] raw ", raw, " processed ", processed)
+    ;
+    
+    OBSERVER DataConsumer2 OBSERVS DataProcessor
+        INT raw = SOURCE.rawValue
+        INT processed = EVENT.processed
+        INT final = processed + 100
+        
+        PRINTLN("    [DataConsumer2] final ", processed, " plus 100 equals ", final)
+    ;

@@ -6,6 +6,9 @@
 #include <iostream>
 #include <algorithm>
 #include <memory>
+#include <map>
+#include <vector>
+#include <set>
 
 inline std::string normalize(std::string name) {
     std::transform(name.begin(), name.end(), name.begin(), ::toupper);
@@ -26,13 +29,20 @@ public:
     ~Generator() { if (fileOut.is_open()) fileOut.close(); }
 
     void generate(std::shared_ptr<ProgramNode> program) {
+        // First pass: collect SOURCE-EVENT and EVENT-OBSERVER relationships
+        collectRelationships(program);
+        
+        // Generate includes
         *outPtr << "#include <iostream>\n#include <string>\n#include <functional>\n#include <cmath>\n";
-        *outPtr << "#include <thread>\n#include <chrono>\n"; 
+        *outPtr << "#include <thread>\n#include <chrono>\n#include <map>\n"; 
         *outPtr << "#include \"include/stdlib/io/console.hpp\"\n";
         *outPtr << "#include \"include/runtime/runtime.hpp\"\n\n";
         
         *outPtr << "int main() {\n";
         *outPtr << "    ams::Runtime rt;\n";
+        *outPtr << "    auto& trackCopyManager = rt.getTrackCopyManager();\n";
+        *outPtr << "    auto& eventBus = rt.getEventBus();\n";
+        *outPtr << "    auto& scheduler = rt.getScheduler();\n\n";
         
         if (program) {
             bool hasRuntime = false;
@@ -45,7 +55,7 @@ public:
             }
             if (hasRuntime) *outPtr << "    rt.init();\n\n";
             
-            // Declare global variables first
+            // Declare global variables
             for (const auto& stmt : program->programBlocks) {
                 if (auto global = std::dynamic_pointer_cast<GlobalSectionNode>(stmt)) {
                     global->accept(this);
@@ -59,17 +69,22 @@ public:
                 }
             }
             
-            for (const auto& stmt : program->programBlocks) {
-                if (auto src = std::dynamic_pointer_cast<SourceDefinitionNode>(stmt))
-                    emitSourceRegistration(src);
-            }
+            // Register EVENT handlers (must be before SOURCE scheduling)
             for (const auto& stmt : program->programBlocks) {
                 if (auto evt = std::dynamic_pointer_cast<EventDefinitionNode>(stmt))
-                    emitEventRegistration(evt);
+                    emitEventHandler(evt);
             }
+            
+            // Register OBSERVER handlers
             for (const auto& stmt : program->programBlocks) {
                 if (auto obs = std::dynamic_pointer_cast<ObserverDefinitionNode>(stmt))
-                    emitObserverRegistration(obs);
+                    emitObserverHandler(obs);
+            }
+            
+            // Schedule SOURCEs
+            for (const auto& stmt : program->programBlocks) {
+                if (auto src = std::dynamic_pointer_cast<SourceDefinitionNode>(stmt))
+                    emitSourceScheduling(src);
             }
             
             *outPtr << "\n    // --- Execution Logic ---\n";
@@ -102,31 +117,28 @@ public:
     void visit(VariableNode* node) override { *outPtr << node->name; }
 
     void visit(VariableDeclarationNode* node) override {
-        std::string cppType = (node->dataType == "INT") ? "int" : 
-                             (node->dataType == "FLOAT") ? "double" :
-                             (node->dataType == "STRING") ? "std::string" : "bool";
-
-        *outPtr << "        " << cppType << " " << node->varName;
+        std::string cppType = getCppType(node->dataType);
+        
+        // TRACK variables in SOURCE should be static to persist across invocations
+        if (node->isTrack) {
+            *outPtr << "        static " << cppType << " " << node->varName;
+        } else {
+            *outPtr << "        " << cppType << " " << node->varName;
+        }
+        
         if (node->value) {
             *outPtr << " = ";
             node->value->accept(this);
         } else {
-            *outPtr << ( (cppType == "std::string") ? " = \"\"" : " = 0" );
+            *outPtr << getDefaultValue(cppType);
         }
         *outPtr << ";\n";
-
-        if (node->isTrack && !currentSourceContext.empty()) {
-            *outPtr << "        rt.updateVar(\"" << currentSourceContext << "\", \"" << node->varName << "\", " << node->varName << ");\n";
-        }
     }
 
     void visit(AssignmentNode* node) override {
         *outPtr << "        " << node->varName << " = ";
         node->expression->accept(this);
         *outPtr << ";\n";
-        if (!currentSourceContext.empty()) {
-            *outPtr << "        rt.updateVar(\"" << currentSourceContext << "\", \"" << node->varName << "\", " << node->varName << ");\n";
-        }
     }
 
     void visit(GlobalSectionNode* node) override {
@@ -189,49 +201,311 @@ public:
     }
 
     void visit(TimeStatementNode* node) override {}
+    
     void visit(DataAccessNode* node) override {
-        *outPtr << "rt.getSnapshot(\"" << normalize(node->sourceName) << "\").getDouble(\"" << node->varName << "\")";
+        if (currentSignalContext.empty()) {
+            // Fallback: shouldn't happen in properly generated code
+            *outPtr << "0";
+            return;
+        }
+        
+        std::string accessor;
+        if (node->sourceName == "SOURCE") {
+            accessor = currentSignalContext + "->getSourceInt";
+        } else if (node->sourceName == "EVENT") {
+            accessor = currentSignalContext + "->getEventInt";
+        } else {
+            *outPtr << "0";
+            return;
+        }
+        
+        // For now, assume INT type (proper implementation would use expectedType)
+        *outPtr << accessor << "(\"" << node->varName << "\")";
     }
-    void visit(SignalNode* node) override {}
+    
+    void visit(SignalNode* node) override {
+        // SIGNAL code generation is handled in emitSourceScheduling and emitEventHandler
+    }
 
 private:
     std::ofstream fileOut;
     std::ostream* outPtr;
-    std::string currentSourceContext = "";
-
-    void emitSourceRegistration(std::shared_ptr<SourceDefinitionNode> node) {
+    std::string currentSignalContext = "";  // Name of SignalContext variable
+    std::map<std::string, std::vector<std::string>> sourceToEvents;
+    std::map<std::string, std::vector<std::string>> eventToObservers;
+    
+    std::string getCppType(const std::string& amsType) {
+        if (amsType == "INT") return "int";
+        if (amsType == "FLOAT") return "double";
+        if (amsType == "STRING") return "std::string";
+        if (amsType == "BOOL") return "bool";
+        return "int";
+    }
+    
+    std::string getDefaultValue(const std::string& cppType) {
+        if (cppType == "std::string") return " = \"\"";
+        return " = 0";
+    }
+    
+    void collectRelationships(std::shared_ptr<ProgramNode> program) {
+        for (const auto& stmt : program->programBlocks) {
+            if (auto evt = std::dynamic_pointer_cast<EventDefinitionNode>(stmt)) {
+                sourceToEvents[normalize(evt->sourceName)].push_back(normalize(evt->eventName));
+            }
+            if (auto obs = std::dynamic_pointer_cast<ObserverDefinitionNode>(stmt)) {
+                eventToObservers[normalize(obs->observesEvent)].push_back(normalize(obs->observerName));
+            }
+        }
+    }
+    
+    std::vector<std::string> getTrackVariables(std::shared_ptr<SourceDefinitionNode> node) {
+        std::vector<std::string> trackVars;
+        for (const auto& stmt : node->statements) {
+            if (auto varDecl = std::dynamic_pointer_cast<VariableDeclarationNode>(stmt)) {
+                if (varDecl->isTrack) {
+                    trackVars.push_back(varDecl->varName);
+                }
+            }
+        }
+        return trackVars;
+    }
+    
+    std::vector<std::string> getShareableEventVariables(std::shared_ptr<EventDefinitionNode> node) {
+        std::vector<std::string> shareableVars;
+        for (const auto& stmt : node->statements) {
+            if (auto varDecl = std::dynamic_pointer_cast<VariableDeclarationNode>(stmt)) {
+                if (!varDecl->isUnshare) {
+                    shareableVars.push_back(varDecl->varName);
+                }
+            }
+        }
+        return shareableVars;
+    }
+    
+    bool hasSignalStatement(const std::vector<std::shared_ptr<ASTNode>>& statements) {
+        for (const auto& stmt : statements) {
+            if (std::dynamic_pointer_cast<SignalNode>(stmt)) {
+                return true;
+            }
+        }
+        return false;
+    }
+    
+    std::shared_ptr<SignalNode> getSignalNode(const std::vector<std::shared_ptr<ASTNode>>& statements) {
+        for (const auto& stmt : statements) {
+            if (auto signal = std::dynamic_pointer_cast<SignalNode>(stmt)) {
+                return signal;
+            }
+        }
+        return nullptr;
+    }
+    
+    void collectUsedVariables(const std::vector<std::shared_ptr<ASTNode>>& statements, std::set<std::string>& vars) {
+        for (const auto& stmt : statements) {
+            if (auto varNode = std::dynamic_pointer_cast<VariableNode>(stmt)) {
+                vars.insert(varNode->name);
+            } else if (auto assignNode = std::dynamic_pointer_cast<AssignmentNode>(stmt)) {
+                vars.insert(assignNode->varName);
+                collectUsedVariablesInExpr(assignNode->expression, vars);
+            } else if (auto signalNode = std::dynamic_pointer_cast<SignalNode>(stmt)) {
+                if (signalNode->condition) {
+                    collectUsedVariablesInExpr(signalNode->condition, vars);
+                }
+            }
+        }
+    }
+    
+    void collectUsedVariablesInExpr(std::shared_ptr<ASTNode> expr, std::set<std::string>& vars) {
+        if (!expr) return;
+        
+        if (auto varNode = std::dynamic_pointer_cast<VariableNode>(expr)) {
+            vars.insert(varNode->name);
+        } else if (auto binOp = std::dynamic_pointer_cast<BinaryOperatorNode>(expr)) {
+            collectUsedVariablesInExpr(binOp->left, vars);
+            collectUsedVariablesInExpr(binOp->right, vars);
+        } else if (auto unOp = std::dynamic_pointer_cast<UnaryOperatorNode>(expr)) {
+            collectUsedVariablesInExpr(unOp->right, vars);
+        }
+    }
+    
+    void emitSourceScheduling(std::shared_ptr<SourceDefinitionNode> node) {
         std::string name = normalize(node->sourceName);
-        std::stringstream body;
-        std::ostream* saved = outPtr;
-        outPtr = &body;
-        currentSourceContext = name;
-        for (const auto& stmt : node->statements) stmt->accept(this);
-        currentSourceContext = "";
-        outPtr = saved;
         int ms = (node->schedule) ? node->schedule->value : 60000;
-        *outPtr << "    rt.schedulePeriodic(\"" << name << "\", " << ms << ", \"MS\", [&]() {\n" << body.str() << "    });\n";
+        
+        *outPtr << "    // SOURCE: " << name << "\n";
+        *outPtr << "    scheduler.schedulePeriodic(\"" << name << "\", " << ms << ", [&]() {\n";
+        
+        // Emit SOURCE body
+        std::stringstream body;
+        std::ostream* saved = outPtr;
+        outPtr = &body;
+        
+        for (const auto& stmt : node->statements) {
+            if (std::dynamic_pointer_cast<SignalNode>(stmt)) {
+                // Handle SIGNAL statement
+                auto signal = std::dynamic_pointer_cast<SignalNode>(stmt);
+                auto trackVars = getTrackVariables(node);
+                
+                *outPtr << "        // SIGNAL statement\n";
+                *outPtr << "        {\n";
+                
+                // Generate condition check
+                if (signal->condition) {
+                    *outPtr << "            bool __signal_condition = ";
+                    signal->condition->accept(this);
+                    *outPtr << ";\n";
+                } else {
+                    *outPtr << "            bool __signal_condition = true;\n";
+                }
+                
+                *outPtr << "            if (__signal_condition) {\n";
+                
+                // Capture TRACK variables
+                *outPtr << "                std::map<std::string, ams::Snapshot::Value> __track_vars;\n";
+                for (const auto& varName : trackVars) {
+                    *outPtr << "                __track_vars[\"" << varName << "\"] = " << varName << ";\n";
+                }
+                
+                // Create TRACK copy
+                *outPtr << "                std::string __context_id = trackCopyManager.createTrackCopy(\n";
+                *outPtr << "                    \"" << name << "\",\n";
+                *outPtr << "                    __track_vars\n";
+                *outPtr << "                );\n";
+                
+                // Publish to EventBus for each attached EVENT with context ID
+                auto it = sourceToEvents.find(name);
+                if (it != sourceToEvents.end()) {
+                    // Add references for each EVENT (they will all release it)
+                    for (size_t i = 0; i < it->second.size(); ++i) {
+                        if (i > 0) {  // First event gets the initial reference
+                            *outPtr << "                trackCopyManager.addReference(__context_id);\n";
+                        }
+                    }
+                    // Publish to each EVENT
+                    for (const auto& eventName : it->second) {
+                        *outPtr << "                eventBus.publish(\"" << eventName << "\", {\"" << name << "\", \"" << eventName << "\", 0, __context_id});\n";
+                    }
+                }
+                
+                *outPtr << "            }\n";
+                *outPtr << "        }\n";
+            } else {
+                stmt->accept(this);
+            }
+        }
+        
+        outPtr = saved;
+        *outPtr << body.str();
+        *outPtr << "    });\n\n";
     }
-
-    void emitEventRegistration(std::shared_ptr<EventDefinitionNode> node) {
+    
+    void emitEventHandler(std::shared_ptr<EventDefinitionNode> node) {
         std::string name = normalize(node->eventName);
+        std::string sourceName = normalize(node->sourceName);
+        
+        *outPtr << "    // EVENT: " << name << " ON " << sourceName << "\n";
+        *outPtr << "    eventBus.subscribe(\"" << name << "\", \"" << name << "_handler\", [&](const ams::EventPayload& __payload) {\n";
+        *outPtr << "        // Get SignalContext from payload\n";
+        *outPtr << "        auto __signal_context = trackCopyManager.getContext(__payload.contextId);\n";
+        *outPtr << "        if (!__signal_context) return;\n\n";
+        
+        currentSignalContext = "__signal_context";
+        
+        // Emit EVENT body
         std::stringstream body;
         std::ostream* saved = outPtr;
         outPtr = &body;
-        for (const auto& stmt : node->statements) stmt->accept(this);
+        
+        for (const auto& stmt : node->statements) {
+            if (std::dynamic_pointer_cast<SignalNode>(stmt)) {
+                // Handle SIGNAL in EVENT
+                auto signal = std::dynamic_pointer_cast<SignalNode>(stmt);
+                auto shareableVars = getShareableEventVariables(node);
+                
+                *outPtr << "        // SIGNAL statement in EVENT\n";
+                *outPtr << "        {\n";
+                
+                if (signal->condition) {
+                    *outPtr << "            bool __signal_condition = ";
+                    signal->condition->accept(this);
+                    *outPtr << ";\n";
+                } else {
+                    *outPtr << "            bool __signal_condition = true;\n";
+                }
+                
+                *outPtr << "            if (__signal_condition) {\n";
+                
+                // Capture EVENT variables
+                *outPtr << "                std::map<std::string, ams::Snapshot::Value> __event_vars;\n";
+                for (const auto& varName : shareableVars) {
+                    *outPtr << "                __event_vars[\"" << varName << "\"] = " << varName << ";\n";
+                }
+                
+                // Create EVENT context with transitive SOURCE data
+                *outPtr << "                std::string __new_context_id = trackCopyManager.createEventContext(\n";
+                *outPtr << "                    \"" << name << "\",\n";
+                *outPtr << "                    __event_vars,\n";
+                *outPtr << "                    __payload.contextId\n";
+                *outPtr << "                );\n";
+                
+                // Publish to OBSERVERs with new context ID
+                auto it = eventToObservers.find(name);
+                if (it != eventToObservers.end()) {
+                    // Add references for each OBSERVER (they will all release it)
+                    for (size_t i = 0; i < it->second.size(); ++i) {
+                        if (i > 0) {  // First observer gets the initial reference
+                            *outPtr << "                trackCopyManager.addReference(__new_context_id);\n";
+                        }
+                    }
+                    // Publish to each OBSERVER
+                    for (const auto& observerName : it->second) {
+                        *outPtr << "                eventBus.publish(\"" << observerName << "\", {\"" << name << "\", \"" << observerName << "\", 0, __new_context_id});\n";
+                    }
+                }
+                
+                *outPtr << "            }\n";
+                *outPtr << "        }\n";
+            } else {
+                stmt->accept(this);
+            }
+        }
+        
         outPtr = saved;
-        *outPtr << "    rt.setSignalCondition(\"" << name << "\", \"" << normalize(node->sourceName) << "\", [&](const ams::Snapshot& snap) {\n" << body.str();
-        if (node->signalCondition) { *outPtr << "        return "; node->signalCondition->accept(this); *outPtr << ";\n"; }
-        else { *outPtr << "        return true;\n"; }
-        *outPtr << "    });\n";
+        *outPtr << body.str();
+        
+        currentSignalContext = "";
+        
+        *outPtr << "        trackCopyManager.releaseContext(__payload.contextId);\n";
+        *outPtr << "    });\n\n";
     }
-
-    void emitObserverRegistration(std::shared_ptr<ObserverDefinitionNode> node) {
+    
+    void emitObserverHandler(std::shared_ptr<ObserverDefinitionNode> node) {
+        std::string name = normalize(node->observerName);
+        std::string eventName = normalize(node->observesEvent);
+        
+        *outPtr << "    // OBSERVER: " << name << " OBSERVS " << eventName << "\n";
+        *outPtr << "    eventBus.subscribe(\"" << name << "\", \"" << name << "_handler\", [&](const ams::EventPayload& __payload) {\n";
+        *outPtr << "        // Get SignalContext from payload\n";
+        *outPtr << "        auto __signal_context = trackCopyManager.getContext(__payload.contextId);\n";
+        *outPtr << "        if (!__signal_context) return;\n\n";
+        
+        currentSignalContext = "__signal_context";
+        
         std::stringstream body;
         std::ostream* saved = outPtr;
         outPtr = &body;
-        for (const auto& stmt : node->statements) stmt->accept(this);
+        
+        for (const auto& stmt : node->statements) {
+            stmt->accept(this);
+        }
+        
         outPtr = saved;
-        *outPtr << "    rt.registerObserver(\"" << normalize(node->observerName) << "\", \"" << normalize(node->observesEvent) << "\", [&](const ams::Snapshot& snap) {\n" << body.str() << "    });\n";
+        *outPtr << body.str();
+        
+        currentSignalContext = "";
+        
+        *outPtr << "        trackCopyManager.releaseContext(__payload.contextId);\n";
+        *outPtr << "    });\n\n";
     }
 };
 

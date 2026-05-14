@@ -143,6 +143,16 @@ public:
         if (ctx->assignment()) return visit(ctx->assignment());
         if (ctx->functionCall()) return visit(ctx->functionCall());
         if (ctx->conditionalStatements()) return visit(ctx->conditionalStatements());
+        
+        // Handle SIGNAL statement in SOURCE
+        if (ctx->SIGNAL()) {
+            std::shared_ptr<ASTNode> cond = nullptr;
+            if (ctx->expression()) {
+                cond = get_node<ASTNode>(visit(ctx->expression()));
+            }
+            return std::static_pointer_cast<ASTNode>(std::make_shared<SignalNode>(cond));
+        }
+        
         return antlrcpp::Any();
     }
 
@@ -176,16 +186,7 @@ public:
             if (auto ptr = get_node<ASTNode>(visit(item))) node->statements.push_back(ptr);
         }
         
-        // Process statements to find SIGNAL
-        std::vector<std::shared_ptr<ASTNode>> filteredStatements;
-        for (auto& stmt : node->statements) {
-            if (auto signal = std::dynamic_pointer_cast<SignalNode>(stmt)) {
-                node->signalCondition = signal->condition;
-            } else {
-                filteredStatements.push_back(stmt);
-            }
-        }
-        node->statements = std::move(filteredStatements);
+        // Don't filter out SignalNode - Generator needs it in statements list
         
         return std::static_pointer_cast<ASTNode>(node);
     }
@@ -195,10 +196,16 @@ public:
         if (ctx->assignment()) return visit(ctx->assignment());
         if (ctx->functionCall()) return visit(ctx->functionCall());
         if (ctx->conditionalStatements()) return visit(ctx->conditionalStatements());
-        if (ctx->SIGNAL() && ctx->expression()) { 
-            auto cond = get_node<ASTNode>(visit(ctx->expression()));
+        
+        // Handle SIGNAL statement in EVENT
+        if (ctx->SIGNAL()) {
+            std::shared_ptr<ASTNode> cond = nullptr;
+            if (ctx->expression()) {
+                cond = get_node<ASTNode>(visit(ctx->expression()));
+            }
             return std::static_pointer_cast<ASTNode>(std::make_shared<SignalNode>(cond));
         }
+        
         return antlrcpp::Any();
     }
 
@@ -337,8 +344,15 @@ public:
     }
 
     virtual antlrcpp::Any visitDataAccess(AMSParser::DataAccessContext *ctx) override {
-        std::string sourceName = ctx->ID(0)->getText();
-        std::string varName = ctx->ID(1)->getText();
+        std::string sourceName;
+        if (ctx->SOURCE()) {
+            sourceName = "SOURCE";
+        } else if (ctx->EVENT()) {
+            sourceName = "EVENT";
+        } else {
+            sourceName = ctx->ID(0)->getText();
+        }
+        std::string varName = ctx->ID(ctx->ID().size() - 1)->getText();  // Last ID is the variable name
         return std::static_pointer_cast<ASTNode>(std::make_shared<DataAccessNode>(sourceName, varName));
     }
 
