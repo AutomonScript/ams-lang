@@ -307,24 +307,34 @@ public:
             return visit(ctx->expression(0));
         }
 
-        // 2. Function Call
+        // 2. LOG_SOURCE Open
+        if (ctx->logSourceOpen()) {
+            return visit(ctx->logSourceOpen());
+        }
+
+        // 3. Method Call (object.method())
+        if (ctx->methodCall()) {
+            return visit(ctx->methodCall());
+        }
+
+        // 4. Function Call
         if (ctx->functionCall()) {
             return visit(ctx->functionCall());
         }
 
-        // 3. Data Access (source.var)
+        // 5. Data Access (source.var)
         if (ctx->dataAccess()) {
             return visit(ctx->dataAccess());
         }
 
-        // 4. Unary Operator
+        // 6. Unary Operator
         if (ctx->expression().size() == 1 && ctx->op) {
             std::string op = ctx->op->getText();
             auto right = get_node<ASTNode>(visit(ctx->expression(0)));
             return std::static_pointer_cast<ASTNode>(std::make_shared<UnaryOperatorNode>(op, right));
         }
 
-        // 5. Binary Operator
+        // 7. Binary Operator
         if (ctx->expression().size() == 2) {
             auto left = get_node<ASTNode>(visit(ctx->expression(0)));
             std::string op = ctx->op->getText();
@@ -332,13 +342,13 @@ public:
             return std::static_pointer_cast<ASTNode>(std::make_shared<BinaryOperatorNode>(left, op, right));
         }
 
-        // 6. Variables
+        // 8. Variables
         if (ctx->ID()) {
             auto node = std::make_shared<VariableNode>(ctx->getText());
             return std::static_pointer_cast<ASTNode>(node);
         }
 
-        // 7. Literals
+        // 9. Literals
         auto litNode = std::make_shared<LiteralNode>(ctx->getText());
         return std::static_pointer_cast<ASTNode>(litNode);
     }
@@ -398,4 +408,36 @@ public:
     }
 
     virtual antlrcpp::Any visitFunctionItem(AMSParser::FunctionItemContext *ctx) override { return visit(ctx->statement()); }
+
+    //##################################### LOG_SOURCE Visitors #######################################
+    virtual antlrcpp::Any visitLogSourceOpen(AMSParser::LogSourceOpenContext *ctx) override {
+        std::string filepath = ctx->STRING_L()->getText();
+        // Remove quotes from string literal
+        filepath = filepath.substr(1, filepath.length() - 2);
+        
+        std::string mode = "READ";  // Default
+        if (ctx->READ()) {
+            mode = "READ";
+        } else if (ctx->WRITE()) {
+            mode = "WRITE";
+        }
+        
+        return std::static_pointer_cast<ASTNode>(std::make_shared<LogSourceOpenNode>(filepath, mode));
+    }
+
+    virtual antlrcpp::Any visitMethodCall(AMSParser::MethodCallContext *ctx) override {
+        std::string objectName = ctx->ID(0)->getText();
+        std::string methodName = ctx->ID(1)->getText();
+        std::vector<std::shared_ptr<ASTNode>> args;
+
+        if (ctx->arguments()) {
+            for (auto* exprCtx : ctx->arguments()->expression()) {
+                if (auto argNode = get_node<ASTNode>(visit(exprCtx))) {
+                    args.push_back(argNode);
+                }
+            }
+        }
+        
+        return std::static_pointer_cast<ASTNode>(std::make_shared<MethodCallNode>(objectName, methodName, args));
+    }
 };

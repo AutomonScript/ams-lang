@@ -36,7 +36,13 @@ public:
         *outPtr << "#include <iostream>\n#include <string>\n#include <functional>\n#include <cmath>\n";
         *outPtr << "#include <thread>\n#include <chrono>\n#include <map>\n"; 
         *outPtr << "#include \"include/stdlib/io/console.hpp\"\n";
-        *outPtr << "#include \"include/runtime/runtime.hpp\"\n\n";
+        *outPtr << "#include \"include/runtime/runtime.hpp\"\n";
+        *outPtr << "#include \"include/stdlib/source/log_source.hpp\"\n";
+        *outPtr << "#include \"include/stdlib/source/log_data.hpp\"\n";
+        *outPtr << "#include \"include/stdlib/source/log_record.hpp\"\n";
+        *outPtr << "#include \"include/stdlib/source/filter_criteria.hpp\"\n\n";
+        
+        *outPtr << "using namespace ams::stdlib::source;\n\n";
         
         *outPtr << "int main() {\n";
         *outPtr << "    ams::Runtime rt;\n";
@@ -118,6 +124,29 @@ public:
 
     void visit(VariableDeclarationNode* node) override {
         std::string cppType = getCppType(node->dataType);
+        
+        // Handle LOG_SOURCE declarations specially
+        if (node->dataType == "LOG_SOURCE" && node->value) {
+            // Generate LOG_SOURCE open with error handling
+            *outPtr << "        auto " << node->varName << "_result = ";
+            node->value->accept(this);
+            *outPtr << ";\n";
+            
+            *outPtr << "        if (" << node->varName << "_result.isErr()) {\n";
+            *outPtr << "            std::cerr << \"Failed to open LOG_SOURCE: \" << ";
+            *outPtr << node->varName << "_result.getErrorMessage() << std::endl;\n";
+            *outPtr << "            return 1;\n";
+            *outPtr << "        }\n";
+            
+            // TRACK variables in SOURCE should be static to persist across invocations
+            if (node->isTrack) {
+                *outPtr << "        static " << cppType << " " << node->varName;
+            } else {
+                *outPtr << "        " << cppType << " " << node->varName;
+            }
+            *outPtr << " = std::move(" << node->varName << "_result.unwrap());\n";
+            return;
+        }
         
         // TRACK variables in SOURCE should be static to persist across invocations
         if (node->isTrack) {
@@ -203,6 +232,23 @@ public:
     void visit(TimeStatementNode* node) override {}
     
     void visit(DataAccessNode* node) override {
+        // Handle LOG_RECORD field access (record.timestamp, record.level, record.message)
+        if (node->varName == "timestamp" || node->varName == "level" || node->varName == "message") {
+            // This is likely a LOG_RECORD field access
+            if (node->sourceName != "SOURCE" && node->sourceName != "EVENT") {
+                // Direct field access on a LOG_RECORD variable
+                if (node->varName == "timestamp") {
+                    *outPtr << node->sourceName << ".getTimestampString()";
+                } else if (node->varName == "level") {
+                    *outPtr << node->sourceName << ".getLevelString()";
+                } else if (node->varName == "message") {
+                    *outPtr << node->sourceName << ".getMessage()";
+                }
+                return;
+            }
+        }
+        
+        // Handle SOURCE/EVENT data access
         if (currentSignalContext.empty()) {
             // Fallback: shouldn't happen in properly generated code
             *outPtr << "0";
@@ -226,6 +272,47 @@ public:
     void visit(SignalNode* node) override {
         // SIGNAL code generation is handled in emitSourceScheduling and emitEventHandler
     }
+    
+    void visit(LogSourceOpenNode* node) override {
+        *outPtr << "LOG_SOURCE::open(\"" << node->filepath << "\", AccessMode::" << node->accessMode << ")";
+    }
+    
+    void visit(MethodCallNode* node) override {
+        // Handle special LOG_SOURCE method calls that need FilterCriteria construction
+        if (node->methodName == "filter" && node->arguments.size() == 1) {
+            // Check if argument is a function call like byLevel(ERROR)
+            if (auto funcCall = std::dynamic_pointer_cast<FunctionCallNode>(node->arguments[0])) {
+                *outPtr << node->objectName << ".filter(FilterCriteria::" << funcCall->functionName << "(";
+                for (size_t i = 0; i < funcCall->arguments.size(); ++i) {
+                    // Handle LogLevel enum values
+                    if (auto varNode = std::dynamic_pointer_cast<VariableNode>(funcCall->arguments[i])) {
+                        if (varNode->name == "DEBUG" || varNode->name == "INFO" || 
+                            varNode->name == "WARN" || varNode->name == "ERROR" || 
+                            varNode->name == "FATAL") {
+                            *outPtr << "LogLevel::" << varNode->name;
+                        } else {
+                            funcCall->arguments[i]->accept(this);
+                        }
+                    } else {
+                        funcCall->arguments[i]->accept(this);
+                    }
+                    if (i < funcCall->arguments.size() - 1) *outPtr << ", ";
+                }
+                *outPtr << "))";
+                return;
+            }
+        }
+        
+        // Standard method call
+        *outPtr << node->objectName << "." << node->methodName << "(";
+        
+        for (size_t i = 0; i < node->arguments.size(); ++i) {
+            node->arguments[i]->accept(this);
+            if (i < node->arguments.size() - 1) *outPtr << ", ";
+        }
+        
+        *outPtr << ")";
+    }
 
 private:
     std::ofstream fileOut;
@@ -239,6 +326,9 @@ private:
         if (amsType == "FLOAT") return "double";
         if (amsType == "STRING") return "std::string";
         if (amsType == "BOOL") return "bool";
+        if (amsType == "LOG_SOURCE") return "LOG_SOURCE";
+        if (amsType == "LOG_DATA") return "LOG_DATA";
+        if (amsType == "LOG_RECORD") return "LOG_RECORD";
         return "int";
     }
     

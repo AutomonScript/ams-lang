@@ -27,6 +27,11 @@ STRING : 'STRING';
 BOOL   : 'BOOL';
 VOID   : 'VOID';
 
+// LOG_SOURCE TYPES
+LOG_SOURCE : 'LOG_SOURCE';
+LOG_DATA   : 'LOG_DATA';
+LOG_RECORD : 'LOG_RECORD';
+
 // Conditional Statements
 IF : 'IF';
 ELSE_IF : 'ELSE'[ \t\r]+'IF';
@@ -42,6 +47,12 @@ ON          : 'ON';
 OBSERVS     : 'OBSERVS';
 UNSHARE     : 'UNSHARE';
 SIGNAL      : 'SIGNAL';
+
+// LOG_SOURCE Keywords
+OPEN        : 'OPEN';
+READ        : 'READ';
+WRITE       : 'WRITE';
+MODE        : 'MODE';
 //----------------------------------------------------------------------------
 LBRACE  : '{';
 RBRACE  : '}';
@@ -99,7 +110,7 @@ ID        : [A-Z_][A-Z0-9_]*;
 eos : SEMICOL?NL+ | EOF ; // END OF STATEMENT 
 
 // Data Types 
-dataType   : INT | FLOAT | STRING | BOOL | VOID ;
+dataType   : INT | FLOAT | STRING | BOOL | VOID | LOG_SOURCE | LOG_DATA | LOG_RECORD ;
 //----------------------------------------------------------------------------
 // Program Sections 
 program 
@@ -151,6 +162,8 @@ expression
     | expression op=(EQ | NEQ) expression
     | expression op=AND expression
     | expression op=OR expression
+    | logSourceOpen
+    | methodCall
     | functionCall
     | dataAccess
     | ID                                      
@@ -158,6 +171,11 @@ expression
     ;
 
 dataAccess : (SOURCE | EVENT | ID) DOT ID ;
+
+// LOG_SOURCE specific expressions
+logSourceOpen : OPEN LOG_SOURCE STRING_L (READ | WRITE)? MODE ;
+
+methodCall : ID DOT ID LPAREN arguments? RPAREN ;
 
 //----------------------------------------------------------------------------
 // Global Section 

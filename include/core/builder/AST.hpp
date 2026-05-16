@@ -36,6 +36,10 @@ class TimeStatementNode;
 class DataAccessNode;
 class SignalNode;
 
+// LOG_SOURCE Nodes
+class LogSourceOpenNode;
+class MethodCallNode;
+
 //############################## Visitor Interfaces #####################################
 class ASTVisitor {
 public:
@@ -70,6 +74,10 @@ public:
     virtual void visit(TimeStatementNode* node) = 0;
     virtual void visit(DataAccessNode* node) = 0;
     virtual void visit(SignalNode* node) = 0;
+    
+    // LOG_SOURCE visitors
+    virtual void visit(LogSourceOpenNode* node) = 0;
+    virtual void visit(MethodCallNode* node) = 0;
 };  
 
 //############################# AST Node Base Class ####################################
@@ -296,6 +304,30 @@ public:
     std::vector<std::string> trackVariables;  // TRACK vars in scope
 
     SignalNode(std::shared_ptr<ASTNode> cond) : condition(std::move(cond)) {}
+    void accept(ASTVisitor* visitor) override { visitor->visit(this); }
+};
+
+//----------------------------- LOG_SOURCE Nodes -----------------------------------------
+class LogSourceOpenNode : public ASTNode {
+public:
+    std::string filepath;
+    std::string accessMode;  // "READ" or "WRITE", defaults to "READ"
+    
+    LogSourceOpenNode(std::string path, std::string mode = "READ")
+        : filepath(std::move(path)), accessMode(std::move(mode)) {}
+    
+    void accept(ASTVisitor* visitor) override { visitor->visit(this); }
+};
+
+class MethodCallNode : public ASTNode {
+public:
+    std::string objectName;
+    std::string methodName;
+    std::vector<std::shared_ptr<ASTNode>> arguments;
+    
+    MethodCallNode(std::string obj, std::string method, std::vector<std::shared_ptr<ASTNode>> args = {})
+        : objectName(std::move(obj)), methodName(std::move(method)), arguments(std::move(args)) {}
+    
     void accept(ASTVisitor* visitor) override { visitor->visit(this); }
 };
 

@@ -11,7 +11,8 @@
 #include "core/supports/caseCaptilizeInputStream.hpp"
 #include "core/builder/AST.hpp"       
 #include "core/builder/Builder.hpp"
-#include "core/compiler/Generator.hpp" 
+#include "core/compiler/Generator.hpp"
+#include "core/compiler/SemanticAnalyzer.hpp"
 
 using namespace antlr4;
 using namespace ams;
@@ -45,6 +46,13 @@ int main(int argc, const char* argv[]) {
 
     Builder astBuilder;
     auto ast = std::any_cast<std::shared_ptr<ProgramNode>>(astBuilder.visit(parseTree));
+
+    // Perform semantic analysis
+    SemanticAnalyzer semanticAnalyzer;
+    if (!semanticAnalyzer.analyze(ast)) {
+        std::cerr << "[ERROR] Semantic analysis failed. Aborting compilation." << std::endl;
+        return 1;
+    }
 
     if (mode == "build") {
         std::string tempCpp = "temp_output.cpp";

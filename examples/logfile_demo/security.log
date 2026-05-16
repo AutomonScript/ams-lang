@@ -1,0 +1,46 @@
+2024-01-15T10:00:00.000Z INFO Security system initialized
+2024-01-15T10:00:05.123Z INFO Authentication service started
+2024-01-15T10:00:10.456Z INFO Access control lists loaded
+2024-01-15T10:00:15.789Z DEBUG User login attempt: user123
+2024-01-15T10:00:20.012Z INFO Login successful: user123
+2024-01-15T10:00:25.345Z DEBUG Session created: sess_abc123
+2024-01-15T10:00:30.678Z DEBUG User login attempt: admin
+2024-01-15T10:00:35.901Z ERROR Login failed: invalid password
+2024-01-15T10:00:40.234Z WARN Failed login attempt for user: admin
+2024-01-15T10:00:45.567Z DEBUG User login attempt: admin
+2024-01-15T10:00:50.890Z ERROR Login failed: invalid password
+2024-01-15T10:00:55.123Z WARN Failed login attempt for user: admin (2nd attempt)
+2024-01-15T10:01:00.456Z DEBUG User login attempt: admin
+2024-01-15T10:01:05.789Z ERROR Login failed: invalid password
+2024-01-15T10:01:10.012Z ERROR Multiple failed login attempts detected
+2024-01-15T10:01:15.345Z WARN Account locked: admin
+2024-01-15T10:01:20.678Z INFO Security alert sent to administrators
+2024-01-15T10:01:25.901Z DEBUG User login attempt: user456
+2024-01-15T10:01:30.234Z INFO Login successful: user456
+2024-01-15T10:01:35.567Z DEBUG Access granted to resource: /api/users
+2024-01-15T10:01:40.890Z DEBUG User login attempt: hacker123
+2024-01-15T10:01:45.123Z ERROR Login failed: user not found
+2024-01-15T10:01:50.456Z WARN Suspicious login attempt from IP: 192.168.1.100
+2024-01-15T10:01:55.789Z DEBUG User login attempt: root
+2024-01-15T10:02:00.012Z ERROR Login failed: authentication failed
+2024-01-15T10:02:05.345Z ERROR Brute force attack detected from IP: 192.168.1.100
+2024-01-15T10:02:10.678Z WARN IP blocked: 192.168.1.100
+2024-01-15T10:02:15.901Z INFO Firewall rule added
+2024-01-15T10:02:20.234Z DEBUG User logout: user123
+2024-01-15T10:02:25.567Z INFO Session terminated: sess_abc123
+2024-01-15T10:02:30.890Z ERROR Unauthorized access attempt to /admin
+2024-01-15T10:02:35.123Z WARN Access denied: insufficient permissions
+2024-01-15T10:02:40.456Z DEBUG Security scan initiated
+2024-01-15T10:02:45.789Z INFO No vulnerabilities detected
+2024-01-15T10:02:50.012Z FATAL Intrusion detected: unauthorized file access
+2024-01-15T10:02:55.345Z FATAL Security breach: sensitive data accessed
+2024-01-15T10:03:00.678Z ERROR Emergency lockdown initiated
+2024-01-15T10:03:05.901Z INFO All sessions terminated
+2024-01-15T10:03:10.234Z INFO Security incident logged
+2026-05-16T10:10:28.664Z DEBUG User login attempt: newuser
+2026-05-16T10:10:32.707Z ERROR Authentication failed for user: attacker
+2026-05-16T10:10:32.714Z WARN Suspicious activity detected
+2026-05-16T10:10:36.779Z ERROR Brute force attack detected
+2026-05-16T10:10:40.839Z FATAL Security breach: unauthorized access to database
+2026-05-16T10:10:40.843Z ERROR Intrusion attempt blocked
+2026-05-16T10:10:44.931Z INFO Security measures reinforced
